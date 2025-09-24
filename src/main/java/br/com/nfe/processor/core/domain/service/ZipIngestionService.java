@@ -85,11 +85,9 @@ public class ZipIngestionService {
                     if (name.endsWith(".xml")) {
                         xmlContents.add(readEntry(zipInputStream));
                         zipInputStream.closeEntry();
-                    } else if (name.endsWith(".pdf")) {
-                        pdfEntries.add(name);
-                        handlePdfEntry(zipInputStream, name, xmlContents, ocrRequested);
-                        zipInputStream.closeEntry();
-                    } else {
+                    }else if (name.endsWith(".pdf") || name.endsWith(".png") || name.endsWith(".jpg")) { // Adiciona novas extensões
+                        handleImageEntry(zipInputStream, name, xmlContents, ocrRequested); // Renomeia o método para ser mais genérico
+                        zipInputStream.closeEntry();} else {
                         throw new UnprocessableEntityException("Extensão não suportada: " + name);
                     }
                 }
@@ -130,7 +128,7 @@ public class ZipIngestionService {
         return out.toString(StandardCharsets.UTF_8);
     }
 
-    private void handlePdfEntry(ZipInputStream inputStream, String name, List<String> xmlContents, boolean ocrRequested)
+    private void handleImageEntry (ZipInputStream inputStream, String name, List<String> xmlContents, boolean ocrRequested)
             throws IOException {
         ByteArrayOutputStream buffer = new ByteArrayOutputStream();
         byte[] data = new byte[4096];
