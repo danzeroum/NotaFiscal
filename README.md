@@ -1,21 +1,72 @@
-# 🚀 BuildToFlip v5 — Pacote Completo
+# NFe Processor — MVP BuildToFlip v5
 
-Inclui:
-- Scripts de utilidade (wizard, consensus, decision, gates, redteam, override, evidence, codex commit/PR).
-- Schemas JSON.
-- OpenAPI de exemplo (`docs/API/openapi.yaml`).
-- Projeto Java Spring Boot (`src/main/java/...`, `pom.xml` com Jacoco).
-- Teste de carga com k6 (`k6/load-test.js`).
+Processador mínimo de lotes de NFe seguindo o handoff Crisp Pragmatist.
 
-## Fluxo rápido
+## ✅ Requisitos
+- Java 21
+- Maven Wrapper (`./mvnw`)
+
+## ⚙️ Setup rápido (< 5 min)
 ```bash
-bash scripts/dependency-check.sh
-bash scripts/wizard-4-voices-v5.sh mvp
-bash scripts/consolidate-voices-v5.sh mvp
-bash scripts/generate-decision-pro-v5.sh
-bash scripts/codex-commit-pr.sh "feat: entrega Codex MVP" feature/mvp
-bash scripts/gates-v5.sh mvp fintech
-bash scripts/redteam-contextual.sh fintech "java-spring"
-bash scripts/evidence-to-pdf.sh
-bash scripts/progress-dashboard.sh mvp
+./mvnw clean package
+./mvnw spring-boot:run
 ```
+
+A aplicação sobe em `http://localhost:8080`.
+
+## 🔌 Endpoints principais
+| Método | Caminho | Descrição |
+| ------ | ------- | --------- |
+| `POST` | `/batches` | Faz upload de um ZIP com XML/PDF e inicia processamento |
+| `GET` | `/batches/{id}` | Retorna status, estatísticas e amostra de validações |
+| `GET` | `/batches/{id}/export.xlsx` | Exporta planilha padrão ERP |
+| `GET` | `/actuator/health` | Healthcheck Spring Boot |
+
+### Exemplos `curl`
+```bash
+# Gerar amostras (caso não existam)
+./scripts/create-samples.sh
+
+# Criar lote com o ZIP gerado
+curl -F "file=@samples/ok-two-xml.zip" http://localhost:8080/batches
+
+# Consultar resumo do lote
+curl http://localhost:8080/batches/{id}
+
+# Exportar Excel
+curl -L -o export.xlsx http://localhost:8080/batches/{id}/export.xlsx
+```
+
+## 🧪 Testes
+```bash
+./mvnw test
+```
+
+Inclui testes unitários para cada serviço obrigatório e testes de integração cobrindo o fluxo do endpoint `POST /batches` (casos positivos e negativos).
+
+## 🗂️ Amostras
+Os artefatos binários são gerados sob demanda pelo script `./scripts/create-samples.sh` e não são versionados.
+Após executar o script, os seguintes pacotes ficam disponíveis em `samples/`:
+- `ok-two-xml.zip` — duas NF-e válidas
+- `bad-totals.zip` — divergência de totais detectada
+- `pdf-no-xml.zip` — contém apenas PDF (falha quando OCR está desabilitado)
+
+## 🔐 Feature Flags
+- `ocr.enabled=false` (padrão) — ativa integração experimental via Tess4J
+- `sefaz.stub.enabled=true` — stub de validação de chave NFe para ambiente demo
+
+## 🔎 Observabilidade
+- Healthcheck: `GET /actuator/health`
+- Todos os erros seguem RFC 7807 com `traceId` correlacionado via MDC (`X-Trace-Id`).
+
+## 📄 Contrato
+O contrato oficial está em `docs/API/openapi.yaml` e reflete os endpoints implementados.
+
+## 📦 Export Excel
+A planilha gerada contém as colunas:
+`chave_acesso, emitente, destinatario, qtde_itens, total, icms, ipi, iss, erros, avisos`.
+
+## 📝 Notas
+- Injeção por construtor em todos os componentes Spring
+- Dados persistidos em H2 em memória (`jdbc:h2:mem:nfeprocessor`)
+- OCR permanece stubado até habilitação explícita da flag
