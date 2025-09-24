@@ -1,0 +1,109 @@
+{
+  "project": "nfe-processor",
+  "phase": "2.2-final-consensus",
+  "objective": "Detalhar a estratégia de implementação e operação para as funcionalidades da Fase 2, focando em arquitetura, tecnologia, métricas de sucesso e mitigação de riscos operacionais.",
+  "timestamp": "2025-09-24T20:00:00Z",
+  "prioritized_implementation_order": [
+    "1. dashboard-minimum",
+    "2. ocr-real",
+    "3. sefaz-integration-real"
+  ],
+  "implementation_decisions": {
+    "dashboard-minimum": {
+      "priority": 1,
+      "summary": "Implementar como um 'quick win' para habilitar demonstrações de venda. Frontend simples (SPA) servido como conteúdo estático pelo backend, com uma nova API paginada.",
+      "technical_decisions": [
+        "Criar novo endpoint paginado `GET /batches` em `BatchController.java` usando `Pageable` do Spring Data.",
+        "Frontend como SPA simples (VanillaJS/HTMX) na pasta `src/main/resources/static`.",
+        "Utilizar `PagingAndSortingRepository` para a paginação no `BatchRepository`.",
+        "Configurar limite de tamanho de arquivo (ex: `spring.servlet.multipart.max-file-size=10MB`) no `application.yml`."
+      ],
+      "success_metrics": {
+        "performance": "P95 da API GET /batches < 200ms",
+        "usability": "Upload e visualização do status do lote em < 3 cliques.",
+        "adoption": "Alvo de >50% dos usuários usando o upload via UI."
+      }
+    },
+    "ocr-real": {
+      "priority": 2,
+      "summary": "Implementar a lógica real de OCR para aumentar a flexibilidade, com foco em testar a precisão cedo e alertar o usuário sobre a confiabilidade dos dados.",
+      "technical_decisions": [
+        "A lógica de extração será implementada no `Tess4JOcrAdapter.java`.",
+        "A chamada ao `OcrAdapter` deve ser feita de forma assíncrona (`@Async`).",
+        "Adicionar um campo booleano `ocrProcessed` na entidade `Invoice` para rastrear a origem dos dados.",
+        "É mandatório que toda NFe via OCR gere um `Issue` de alerta: 'Dados extraídos via OCR, verificação manual recomendada'."
+      ],
+      "success_metrics": {
+        "performance": "Processamento OCR de uma página A4 < 8 segundos por núcleo de CPU.",
+        "accuracy": "Taxa de acerto na extração da chave NFe > 70%.",
+        "quality_gate": "NO-GO se a precisão for inferior a 70%."
+      }
+    },
+    "sefaz-integration-real": {
+      "priority": 3,
+      "summary": "Implementar a validação na SEFAZ por último, com foco em segurança, resiliência e gerenciamento de certificados.",
+      "technical_decisions": [
+        "Criar interface `SefazClient` e implementação `SefazAdapter` no pacote `adapter/out/sefaz`.",
+        "A resposta do adapter deve ser um `enum SefazStatus { AUTORIZADA, CANCELADA, DENEGADA, INEXISTENTE, INDISPONIVEL }`.",
+        "Implementar Circuit Breaker com timeouts curtos (3s).",
+        "Gerenciar o certificado digital via keystore, com caminho e senha configurados via variáveis de ambiente."
+      ],
+      "success_metrics": {
+        "availability": ">95% das consultas à SEFAZ < 3s.",
+        "reliability": "Falhas na SEFAZ não devem resultar em erro 500.",
+        "quality_gate": "NO-GO sem testes de carga e documentação de contingência."
+      }
+    }
+  },
+  "operational_plan": {
+    "security_configuration": {
+      "certificate_management": {
+        "staging": "Certificado de homologação da SEFAZ (A1)",
+        "production": "Armazenar em AWS Secrets Manager ou Vault, com alertas de rotação."
+      },
+      "environment_variables_required": [
+        "SEFAZ_CERT_PATH",
+        "SEFAZ_CERT_PASSWORD",
+        "SEFAZ_ENV (prod/homolog)",
+        "OCR_CONFIDENCE_THRESHOLD"
+      ]
+    },
+    "deployment_strategy": {
+      "ocr": {
+        "rollout": "Uso de Feature flag com rollout progressivo (10% -> 50% -> 100%).",
+        "rollback": "Desativar com `ocr.enabled=false`."
+      },
+      "sefaz": {
+        "rollout": "Iniciar em modo 'shadow' (apenas loga, não bloqueia), depois Canary Release para clientes selecionados.",
+        "rollback": "Reativar o stub com `sefaz.stub.enabled=true`."
+      }
+    },
+    "contingency_plans": {
+      "sefaz_down": {
+        "detection": "3 timeouts consecutivos (via Circuit Breaker).",
+        "action": "Mudar para modo degradado (não valida na SEFAZ) e notificar via alerta e banner no dashboard.",
+        "recovery": "Auto-retry a cada 5 minutos."
+      },
+      "ocr_failure": {
+        "detection": "Acurácia < 50% na última hora.",
+        "action": "Desabilitar OCR para o lote e exigir apenas XML, criando um `Issue` de alta severidade."
+      }
+    }
+  },
+  "quality_gates_phase2": {
+    "geral": "Cada funcionalidade deve ter seu PR separado, com documentação e Health Indicator atualizados.",
+    "dashboard": ["Teste de carga com 100 usuários concorrentes.", "Teste de segurança XSS/CSRF."],
+    "ocr": ["Processar 100 PDFs reais para medir acurácia.", "Teste de performance sob estresse de CPU."],
+    "sefaz": ["Simular falha de rede (network partition).", "Teste de expiração de certificado."]
+  },
+  "unaddressed_risks_for_phase3": [
+    "Legal/Compliance: Limites de uso dos Web Services da SEFAZ.",
+    "Cost: Avaliar se o consumo de CPU do OCR justifica o uso de serviços como AWS Textract.",
+    "LGPD: Auditoria de acesso para o dashboard.",
+    "Vendor Lock-in: Preparar a arquitetura para a possível migração da SEFAZ de SOAP para REST."
+  ],
+  "final-consensus": {
+    "summary": "O plano da Fase 2 está validado e detalhado, cobrindo implementação, operação e riscos. O projeto está pronto para o próximo handoff.",
+    "next_step": "Gerar o 'Handoff ao Codex - Fase 2' com base neste documento."
+  }
+}
