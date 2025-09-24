@@ -2,6 +2,7 @@ package br.com.nfe.processor.exception;
 
 import br.com.nfe.processor.config.TraceIdFilter;
 import jakarta.servlet.http.HttpServletRequest;
+import java.net.URI; // ESSENCIAL
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
@@ -23,7 +24,8 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ProblemException.class)
     public ProblemDetail handleProblemException(ProblemException ex, HttpServletRequest request) {
         ProblemDetail detail = ProblemDetail.forStatusAndDetail(ex.getStatus(), ex.getMessage());
-        detail.setType(ex.getType() != null ? ex.getType() : defaultType(ex.getStatus()));
+        // CORRIGIDO AQUI
+        detail.setType(URI.create(ex.getType() != null ? ex.getType() : defaultType(ex.getStatus())));
         detail.setTitle(ex.getStatus().getReasonPhrase());
         decorate(detail, request);
         return detail;
@@ -36,7 +38,8 @@ public class GlobalExceptionHandler {
                 .map(FieldError::getDefaultMessage)
                 .orElse("Request validation failed");
         ProblemDetail detail = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, message);
-        detail.setType(PROBLEM_BASE_URL + "/validation-error");
+        // CORRIGIDO AQUI
+        detail.setType(URI.create(PROBLEM_BASE_URL + "/validation-error"));
         detail.setTitle("Erro de validação");
         decorate(detail, request);
         return detail;
@@ -45,7 +48,8 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MultipartException.class)
     public ProblemDetail handleMultipartException(MultipartException ex, HttpServletRequest request) {
         ProblemDetail detail = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Arquivo inválido ou ausente");
-        detail.setType(PROBLEM_BASE_URL + "/multipart-error");
+        // CORRIGIDO AQUI
+        detail.setType(URI.create(PROBLEM_BASE_URL + "/multipart-error"));
         detail.setTitle("Requisição inválida");
         decorate(detail, request);
         return detail;
@@ -55,7 +59,8 @@ public class GlobalExceptionHandler {
     public ProblemDetail handleErrorResponseException(ErrorResponseException ex, HttpServletRequest request) {
         ProblemDetail detail = ex.getBody();
         if (detail.getType() == null) {
-            detail.setType(defaultType(HttpStatus.valueOf(detail.getStatus())));
+            // CORRIGIDO AQUI
+            detail.setType(URI.create(defaultType(HttpStatus.valueOf(detail.getStatus()))));
         }
         if (detail.getTitle() == null) {
             detail.setTitle(HttpStatus.valueOf(detail.getStatus()).getReasonPhrase());
@@ -67,14 +72,15 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ProblemDetail handleUnexpected(Exception ex, HttpServletRequest request) {
         ProblemDetail detail = ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR, "Erro interno do servidor. Por favor, tente novamente.");
-        detail.setType(PROBLEM_BASE_URL + "/internal-error");
+        // CORRIGIDO AQUI
+        detail.setType(URI.create(PROBLEM_BASE_URL + "/internal-error"));
         detail.setTitle("Erro interno");
         decorate(detail, request);
         return detail;
     }
 
     private void decorate(ProblemDetail detail, HttpServletRequest request) {
-        detail.setInstance(request.getRequestURI());
+        detail.setInstance(URI.create(request.getRequestURI()));
         detail.setProperty(TraceIdFilter.TRACE_ID_KEY, ensureTraceId());
         detail.setProperty("timestamp", Instant.now());
     }
@@ -90,6 +96,6 @@ public class GlobalExceptionHandler {
     }
 
     private String defaultType(HttpStatus status) {
-        return PROBLEM_BASE_URL + "/" + status.value();
+        return PROBLEM_BASE_URL + "/" + String.valueOf(status.value());
     }
 }

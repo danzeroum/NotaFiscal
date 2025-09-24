@@ -13,6 +13,9 @@ spring:
   h2:
     console:
       enabled: false
+  devtools:
+    restart:
+      enabled: false
 
 server:
   error:
