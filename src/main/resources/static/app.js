@@ -5,6 +5,9 @@ const state = {
   loading: false,
 };
 
+const MAX_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024;
+let uploadInProgress = false;
+
 const statusLabels = {
   RECEIVED: 'Recebido',
   PROCESSING: 'Processando',
@@ -26,6 +29,8 @@ const batchesContainer = document.getElementById('batchesContainer');
 const pagination = document.getElementById('pagination');
 const batchTemplate = document.getElementById('batchTemplate');
 
+const sanitizeText = (value) => String(value ?? '').replace(/[<>]/g, '');
+
 function setFeedback(message, type = 'info') {
   uploadFeedback.textContent = message;
   uploadFeedback.className = `feedback ${type}`;
@@ -33,7 +38,7 @@ function setFeedback(message, type = 'info') {
 
 async function uploadBatch(event) {
   event.preventDefault();
-  if (state.loading) return;
+  if (state.loading || uploadInProgress) return;
 
   const formData = new FormData(uploadForm);
   const file = formData.get('file');
@@ -42,7 +47,13 @@ async function uploadBatch(event) {
     return;
   }
 
+  if (file.size > MAX_UPLOAD_SIZE_BYTES) {
+    setFeedback('Arquivo muito grande. Máximo permitido: 10MB.', 'error');
+    return;
+  }
+
   state.loading = true;
+  uploadInProgress = true;
   setFeedback('Enviando lote…', 'info');
 
   try {
@@ -66,6 +77,7 @@ async function uploadBatch(event) {
     setFeedback('Não foi possível enviar o lote. Verifique o arquivo e tente novamente.', 'error');
   } finally {
     state.loading = false;
+    uploadInProgress = false;
   }
 }
 
@@ -105,7 +117,7 @@ function renderBatch(batch) {
   const issueList = fragment.querySelector('.issue-list');
   issues.forEach((issue) => {
     const item = document.createElement('li');
-    item.textContent = issue;
+    item.textContent = sanitizeText(issue);
     issueList.appendChild(item);
   });
 
