@@ -64,7 +64,9 @@ class BatchControllerIntegrationTest {
         MockMultipartFile file = new MockMultipartFile("file", "pdf-no-xml.zip", "application/zip", zip);
         mockMvc.perform(multipart("/batches").file(file))
                 .andExpect(status().isUnprocessableEntity())
-                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON));
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.traceId").isNotEmpty())
+                .andExpect(jsonPath("$.instance").value("/batches"));
     }
 
     private byte[] zipWith(Map<String, String> files) throws IOException {

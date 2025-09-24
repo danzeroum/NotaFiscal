@@ -1,6 +1,7 @@
 package br.com.nfe.processor.core.domain.service;
 
 import br.com.nfe.processor.core.domain.service.dto.ParsedInvoice;
+import br.com.nfe.processor.core.domain.valueobject.Cnpj;
 import br.com.nfe.processor.exception.UnprocessableEntityException;
 import java.io.ByteArrayInputStream;
 import java.math.BigDecimal;
@@ -46,7 +47,7 @@ public class XmlParserService {
             }
 
             String emitterName = textContent(emit, "xNome");
-            String emitterTaxId = firstNonEmpty(emit, "CNPJ", "CPF");
+            Cnpj emitterTaxId = parseCnpj(emit);
             String recipientName = textContent(dest, "xNome");
             String recipientTaxId = firstNonEmpty(dest, "CNPJ", "CPF");
 
@@ -125,5 +126,14 @@ public class XmlParserService {
             }
         }
         throw new UnprocessableEntityException("Documento fiscal sem identificador válido");
+    }
+
+    private Cnpj parseCnpj(Element element) {
+        String raw = textContent(element, "CNPJ");
+        try {
+            return new Cnpj(raw);
+        } catch (IllegalArgumentException ex) {
+            throw new UnprocessableEntityException("CNPJ do emitente inválido: " + ex.getMessage());
+        }
     }
 }

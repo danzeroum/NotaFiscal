@@ -26,6 +26,7 @@ class XmlParserServiceTest {
         ParsedInvoice invoice = service.parse(xml);
         assertThat(invoice.getAccessKey()).isNotBlank();
         assertThat(invoice.getEmitterName()).isEqualTo("Empresa Emitente Ltda");
+        assertThat(invoice.getEmitterTaxId().value()).isEqualTo("12345678000195");
         assertThat(invoice.getItemCount()).isEqualTo(2);
         assertThat(invoice.getTotalAmount().doubleValue()).isEqualTo(500.00d);
     }
@@ -36,5 +37,15 @@ class XmlParserServiceTest {
         assertThatThrownBy(() -> service.parse(xml))
                 .isInstanceOf(UnprocessableEntityException.class)
                 .hasMessageContaining("infNFe");
+    }
+
+    @Test
+    void shouldFailWhenEmitterCnpjInvalid() throws Exception {
+        String xml = Files.readString(Path.of("samples/xml/ok-01.xml"))
+                .replace("12345678000195", "12345678000100");
+
+        assertThatThrownBy(() -> service.parse(xml))
+                .isInstanceOf(UnprocessableEntityException.class)
+                .hasMessageContaining("CNPJ do emitente inválido");
     }
 }

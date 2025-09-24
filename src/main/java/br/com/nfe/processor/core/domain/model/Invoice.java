@@ -1,5 +1,6 @@
 package br.com.nfe.processor.core.domain.model;
 
+import br.com.nfe.processor.core.domain.valueobject.Cnpj;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -33,7 +34,7 @@ public class Invoice {
     private String emitterName;
 
     @Column(name = "emitter_tax_id", nullable = false)
-    private String emitterTaxId;
+    private Cnpj emitterTaxId;
 
     @Column(name = "recipient_name", nullable = false)
     private String recipientName;
@@ -96,11 +97,11 @@ public class Invoice {
         this.emitterName = emitterName;
     }
 
-    public String getEmitterTaxId() {
+    public Cnpj getEmitterTaxId() {
         return emitterTaxId;
     }
 
-    public void setEmitterTaxId(String emitterTaxId) {
+    public void setEmitterTaxId(Cnpj emitterTaxId) {
         this.emitterTaxId = emitterTaxId;
     }
 

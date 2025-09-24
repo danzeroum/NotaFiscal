@@ -16,6 +16,7 @@ import br.com.nfe.processor.core.domain.service.FiscalValidationService;
 import br.com.nfe.processor.core.domain.service.XmlParserService;
 import br.com.nfe.processor.core.domain.service.ZipIngestionService;
 import br.com.nfe.processor.core.domain.service.dto.ParsedInvoice;
+import br.com.nfe.processor.core.domain.valueobject.Cnpj;
 import br.com.nfe.processor.core.domain.service.dto.ValidationResult;
 import br.com.nfe.processor.exception.UnprocessableEntityException;
 import java.io.ByteArrayOutputStream;
@@ -84,6 +85,14 @@ class ZipIngestionServiceTest {
                 .hasMessageContaining("OCR desabilitado");
     }
 
+    @Test
+    void shouldRejectUnsupportedExtension() {
+        MockMultipartFile file = new MockMultipartFile("file", "lote.zip", "application/zip", zipWith("arquivo.txt", "conteudo"));
+        assertThatThrownBy(() -> service.ingest(file, false))
+                .isInstanceOf(UnprocessableEntityException.class)
+                .hasMessageContaining("Extensão não suportada");
+    }
+
     private byte[] zipWith(String name, String content) {
         try {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -102,7 +111,7 @@ class ZipIngestionServiceTest {
         return new ParsedInvoice(
                 "chave",
                 "Emitente",
-                "123",
+                new Cnpj("12345678000195"),
                 "Destinatario",
                 "456",
                 1,
