@@ -55,7 +55,7 @@ paths:
                 file:
                   type: string
                   format: binary
-                  description: ZIP contendo NFe em XML e/ou PDF
+                  description: ZIP contendo NFe em XML e/ou PDF (tamanho máximo de 10MB)
                 ocr:
                   type: boolean
                   description: Ativa OCR para PDFs sem XML incorporado (feature flag)
