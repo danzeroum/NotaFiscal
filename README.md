@@ -18,6 +18,7 @@ A aplicação sobe em `http://localhost:8080`.
 | Método | Caminho | Descrição |
 | ------ | ------- | --------- |
 | `POST` | `/batches` | Faz upload de um ZIP com XML/PDF e inicia processamento |
+| `GET` | `/batches` | Lista lotes paginados com status e alertas resumidos |
 | `GET` | `/batches/{id}` | Retorna status, estatísticas e amostra de validações |
 | `GET` | `/batches/{id}/export.xlsx` | Exporta planilha padrão ERP |
 | `GET` | `/actuator/health` | Healthcheck Spring Boot |
@@ -65,6 +66,12 @@ O contrato oficial está em `docs/API/openapi.yaml` e reflete os endpoints imple
 ## 📦 Export Excel
 A planilha gerada contém as colunas:
 `chave_acesso, emitente, destinatario, qtde_itens, total, icms, ipi, iss, erros, avisos`.
+
+## 🖥️ Dashboard mínimo
+- Interface SPA servida em `http://localhost:8080/index.html`.
+- Upload de lotes via formulário (limite configurado em 10MB por arquivo).
+- Lista paginada (5 itens por página) com status, métricas e resumo dos principais alertas.
+- Botão "Atualizar" para sincronizar manualmente os lotes exibidos.
 
 ## 📝 Notas
 - Injeção por construtor em todos os componentes Spring

@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NFe Processor · Dashboard</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="container">
+        <h1>NFe Processor</h1>
+        <p class="subtitle">Upload e monitoramento rápido de lotes</p>
+      </div>
+    </header>
+    <main class="container">
+      <section class="card">
+        <h2>Enviar novo lote</h2>
+        <p class="description">
+          Faça o upload de um arquivo <strong>.zip</strong> contendo as NF-e e acompanhe o processamento em tempo real.
+        </p>
+        <form id="uploadForm" class="form">
+          <div class="form-group">
+            <label for="fileInput">Arquivo ZIP</label>
+            <input id="fileInput" type="file" name="file" accept=".zip" required />
+          </div>
+          <div class="form-group checkbox">
+            <label>
+              <input type="checkbox" name="ocr" /> Processar documentos com OCR
+            </label>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="primary">Enviar lote</button>
+            <button type="reset" class="secondary" id="resetButton">Limpar</button>
+          </div>
+        </form>
+        <div id="uploadFeedback" class="feedback" role="status" aria-live="polite"></div>
+      </section>
+
+      <section class="card">
+        <div class="card-header">
+          <div>
+            <h2>Lotes processados</h2>
+            <p class="description">Status e principais alertas dos lotes enviados recentemente.</p>
+          </div>
+          <div class="card-actions">
+            <button id="refreshButton" class="secondary">Atualizar</button>
+          </div>
+        </div>
+        <div id="batchesContainer" class="batch-list" aria-live="polite"></div>
+        <div id="pagination" class="pagination"></div>
+      </section>
+    </main>
+
+    <template id="batchTemplate">
+      <article class="batch-item">
+        <header class="batch-header">
+          <div>
+            <h3 class="batch-id"></h3>
+            <p class="batch-dates"></p>
+          </div>
+          <span class="badge" data-status="">—</span>
+        </header>
+        <dl class="stats">
+          <div>
+            <dt>Total</dt>
+            <dd class="stat-total">0</dd>
+          </div>
+          <div>
+            <dt>Com sucesso</dt>
+            <dd class="stat-ok">0</dd>
+          </div>
+          <div>
+            <dt>Com alertas</dt>
+            <dd class="stat-issues">0</dd>
+          </div>
+          <div>
+            <dt>P95 (ms)</dt>
+            <dd class="stat-p95">0</dd>
+          </div>
+        </dl>
+        <div class="issues">
+          <h4>Resumo dos alertas</h4>
+          <ul class="issue-list"></ul>
+        </div>
+      </article>
+    </template>
+
+    <script src="/app.js" defer></script>
+  </body>
+</html>
