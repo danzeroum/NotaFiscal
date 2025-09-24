@@ -1,0 +1,49 @@
+{
+  "voter": "Humano-Default",
+  "project_name": "nfe-processor",
+  "level": "lite",
+  "confidence": 0.85,
+  "reason": "MVP com foco em extração, validação fiscal e exportação para ERP, usando componentes reaproveitáveis",
+  "goal_statement": "Processar NFe (XML/PDF) em lote, extrair campos-chave, validar impostos (ICMS/IPI/ISS), detectar inconsistências simples e exportar para Excel/ERP.",
+  "must_have_features": [
+    "upload_lote_nfe (XML e PDF em ZIP)",
+    "extracao_campos_basicos (chave, emitente, destinatario, itens, totais)",
+    "validacao_fiscal_basica (ICMS/IPI/ISS) com regras explícitas",
+    "detector_inconsistencias_simples (totais x somatórios, CFOP/CSOSN básicos)",
+    "export_excel_padrao_erp",
+    "healthcheck_e_logs"
+  ],
+  "nice_to_have_features": [
+    "integracao_sefaz_stub (verificação de chave NFe simulada)",
+    "classificacao_inteligente_plano_contas (heurística/ML leve)",
+    "RAG_basico_para_legislacao (consulta off-line)",
+    "dashboard_minimo (status de lotes, erros, métricas)",
+    "api_rate_limit_e_retry_padroes"
+  ],
+  "explicitly_excluded_now": [
+    "emissao_de_nfe",
+    "contingencia_sefaz",
+    "assintura_digital_avancada",
+    "multi-tenant enterprise",
+    "conectores ERP proprietários",
+    "observabilidade full OTel"
+  ],
+  "constraints": [
+    "Stack Java 21 + Spring Boot 3",
+    "OpenAPI mínima",
+    "Erros em RFC 7807",
+    "Testes unitários (1 positivo + 1 negativo por must_have)",
+    "SLO MVP: P95 < 800ms por NFe em lotes de 100"
+  ],
+  "risks": [
+    "variações de layout NFe",
+    "OCR limitado para PDFs escaneados ruins",
+    "complexidade fiscal estadual/municipal",
+    "dados sensíveis e LGPD"
+  ],
+  "opportunities": [
+    "reuso de componentes OCR/validação",
+    "demo rápida para contábeis/ERPs",
+    "upsell para enterprise (multi-tenant, OTel, conectores oficiais)"
+  ]
+}

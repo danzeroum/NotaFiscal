@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<NFe xmlns="http://www.portalfiscal.inf.br/nfe">
+  <infNFe Id="NFe35140100000000000000550030000000031442312347" versao="4.00">
+    <ide>
+      <cUF>35</cUF>
+      <nNF>3</nNF>
+      <mod>55</mod>
+      <serie>1</serie>
+      <dhEmi>2025-09-23T12:00:00-03:00</dhEmi>
+    </ide>
+    <emit>
+      <CNPJ>32345678000195</CNPJ>
+      <xNome>Distribuidora Teste</xNome>
+    </emit>
+    <dest>
+      <CPF>98765432100</CPF>
+      <xNome>Maria da Silva</xNome>
+    </dest>
+    <det nItem="1">
+      <prod>
+        <cProd>200</cProd>
+        <xProd>Produto Y</xProd>
+        <qCom>2.0000</qCom>
+        <vUnCom>100.00</vUnCom>
+        <vProd>200.00</vProd>
+      </prod>
+    </det>
+    <det nItem="2">
+      <prod>
+        <cProd>201</cProd>
+        <xProd>Produto Z</xProd>
+        <qCom>1.0000</qCom>
+        <vUnCom>150.00</vUnCom>
+        <vProd>150.00</vProd>
+      </prod>
+    </det>
+    <total>
+      <ICMSTot>
+        <vNF>300.00</vNF> <!-- Divergente: deveria ser 350.00 -->
+        <vProd>350.00</vProd>
+        <vICMS>54.00</vICMS>
+        <vIPI>5.00</vIPI>
+      </ICMSTot>
+    </total>
+  </infNFe>
+</NFe>

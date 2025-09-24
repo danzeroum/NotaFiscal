@@ -1,0 +1,49 @@
+{
+  "voter": "Auditor",
+  "success_criteria": [
+    "README com setup < 5 minutos (Maven wrapper + run)",
+    "OpenAPI mínima publicada em docs/API/openapi.yaml",
+    "Erros em RFC 7807 com traceId (MDC) e instance",
+    "Testes: para cada must_have, 1 positivo e 1 negativo",
+    "P95 < 800ms por NFe (batch 100) em ambiente dev",
+    "Export Excel consistente com somatórios conferidos"
+  ],
+  "metrics": {
+    "time_to_demo": "< 10 min",
+    "setup_time": "< 5 min",
+    "test_coverage_target": ">= 65% MVP (mínimo, priorizar serviços de regra)",
+    "error_rate": "< 1% em lote de 100",
+    "performance_p95_ms": 800
+  },
+  "quality_gates": [
+    "Style Guide v2: constructor injection, nada de @Autowired em campo",
+    "Proibição de segredos hardcoded",
+    "Validações @Valid/@NotBlank em payloads",
+    "Sem concatenação de SQL; se houver, parametrizado",
+    "Logs sem dados sensíveis (LGPD) e com traceId"
+  ],
+  "risks_main": [
+    "OCR impreciso gerando falsos positivos/negativos",
+    "Regras fiscais incompletas para todos estados/municípios",
+    "PDFs com baixa qualidade inviabilizando extração",
+    "Planilha ERP divergente do esperado pelo cliente"
+  ],
+  "mitigations": [
+    "Fallback para somente XML no MVP; OCR sob flag e marcado como experimental",
+    "Escopo claro das regras fiscais (documentado no README + ADRs)",
+    "Suite de testes com XMLs de referência (válido, inválido, divergente)",
+    "Template Excel congelado e validado com buyer antes do demo"
+  ],
+  "go_no_go": [
+    "NO-GO se RFC 7807 ausente ou OpenAPI ausente",
+    "NO-GO se export.xlsx não reconcilia totais e impostos",
+    "NO-GO se falhar teste negativo crítico (ex: soma itens ≠ total)"
+  ],
+  "handoff_requirements": [
+    "README atualizado (run, flags, exemplos)",
+    "OpenAPI mínima consistente com endpoints",
+    "Exemplos de ZIPs de teste (ok, divergente, pdf-ruim)",
+    "Relatório de testes (resumo) e evidências dos critérios",
+    "ADRs registradas: 001-004"
+  ]
+}

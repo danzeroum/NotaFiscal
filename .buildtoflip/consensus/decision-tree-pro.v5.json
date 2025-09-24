@@ -1,0 +1,89 @@
+{
+  "project": {
+    "name": "nfe-processor",
+    "profile": "MVP-lite",
+    "tech_stack": [ "Java 21", "Spring Boot 3", "Maven", "H2" ]
+  },
+  "must_have_features": [
+    {
+      "id": "upload_lote_nfe",
+      "title": "Upload em lote (ZIP XML/PDF)"
+    },
+    {
+      "id": "extracao_campos_basicos",
+      "title": "Extração de campos essenciais"
+    },
+    {
+      "id": "validacao_fiscal_basica",
+      "title": "Validação fiscal básica (ICMS/IPI/ISS)"
+    },
+    {
+      "id": "detector_inconsistencias_simples",
+      "title": "Detecção de inconsistências simples"
+    },
+    {
+      "id": "export_excel_padrao_erp",
+      "title": "Exportação Excel padrão ERP"
+    },
+    {
+      "id": "healthcheck_e_logs",
+      "title": "Healthcheck + logs estruturados"
+    }
+  ],
+  "nice_to_have_features": [
+    {
+      "id": "integracao_sefaz_stub",
+      "title": "Stub de verificação SEFAZ"
+    },
+    {
+      "id": "classificacao_plano_contas",
+      "title": "Classificação por plano de contas (heurística)"
+    },
+    {
+      "id": "rag_basico_legislacao",
+      "title": "RAG básico para legislação fiscal"
+    },
+    {
+      "id": "dashboard_minimo",
+      "title": "Dashboard mínimo de lotes/erros"
+    },
+    {
+      "id": "api_resilience",
+      "title": "Rate limit + retry policy (infra)"
+    }
+  ],
+  "success_metrics": [
+    "README funcional (<5min)",
+    "OpenAPI mínima presente",
+    "Testes básicos passam (inclui negativo por must_have)",
+    "P95 < 800ms por NFe (lote 100)",
+    "Excel reconcilia totais/impostos"
+  ],
+  "decision_tree": {
+    "foundation_level": "lite",
+    "architecture_style": "modular_monolith",
+    "pipeline": [ "ingestion", "extraction", "fiscal-validation", "anomaly-check", "export" ],
+    "feature_flags": [
+      {
+        "flag": "ocr.enabled",
+        "default": false
+      },
+      {
+        "flag": "sefaz.stub.enabled",
+        "default": true
+      }
+    ],
+    "deferrals": [
+      {
+        "module": "multi-tenant",
+        "why": "não requerido no MVP",
+        "when": "contrato enterprise"
+      },
+      {
+        "module": "otel-full",
+        "why": "observabilidade mínima já suficiente",
+        "when": "SLA enterprise"
+      }
+    ]
+  }
+}

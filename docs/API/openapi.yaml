@@ -1,0 +1,207 @@
+openapi: 3.1.0
+info:
+  title: NFe Processor API
+  version: "0.1.0"
+  description: >
+    API mínima do MVP para processamento de NFe em lote (ZIP com XML/PDF),
+    validação fiscal básica, detecção de inconsistências e exportação para Excel.
+servers:
+  - url: http://localhost:8080
+paths:
+  /batches:
+    post:
+      summary: Cria um novo lote de processamento de NFe a partir de um arquivo ZIP
+      operationId: createBatch
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: ZIP contendo NFe em XML e/ou PDF
+                ocr:
+                  type: boolean
+                  description: Ativa OCR para PDFs sem XML incorporado (feature flag)
+      responses:
+        "201":
+          description: Lote criado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BatchCreated"
+        "400":
+          description: Requisição inválida (arquivo ausente, formato incorreto)
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          description: Conteúdo inválido (ZIP corrompido, PDFs ilegíveis, etc.)
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+
+  /batches/{id}:
+    get:
+      summary: Consulta o status e o sumário do lote
+      operationId: getBatch
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Sumário do lote
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BatchSummary"
+        "404":
+          description: Lote não encontrado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+
+  /batches/{id}/export.xlsx:
+    get:
+      summary: Exporta planilha consolidada do lote para ERP
+      operationId: exportBatchExcel
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Arquivo Excel
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+              description: attachment; filename="nfe-batch.xlsx"
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Lote não encontrado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "409":
+          description: Lote ainda em processamento; exportação não disponível
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+
+components:
+  schemas:
+    Problem:
+      type: object
+      description: RFC 7807 - application/problem+json
+      properties:
+        type:
+          type: string
+          description: URI de identificação do tipo de problema
+          example: "https://example.com/problems/validation-error"
+        title:
+          type: string
+          example: "Validation Failed"
+        status:
+          type: integer
+          example: 422
+        detail:
+          type: string
+          example: "Soma dos itens diverge do total informado"
+        instance:
+          type: string
+          example: "/batches/123"
+        traceId:
+          type: string
+          description: Correlacionador de logs (MDC)
+      required: [title, status]
+    BatchCreated:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "b_01J7YH8X0D6Z9W"
+        status:
+          type: string
+          enum: [RECEIVED, PROCESSING, DONE, FAILED]
+          example: "RECEIVED"
+        receivedAt:
+          type: string
+          format: date-time
+      required: [id, status, receivedAt]
+    Issue:
+      type: object
+      properties:
+        type:
+          type: string
+          example: "TOTALS_MISMATCH"
+        severity:
+          type: string
+          enum: [LOW, MEDIUM, HIGH]
+          example: "HIGH"
+        detail:
+          type: string
+          example: "Soma itens (R$ 1.000,00) != total NFe (R$ 950,00)"
+    ValidationEntry:
+      type: object
+      properties:
+        rule:
+          type: string
+          example: "ICMS_BASE_CALCULO"
+        result:
+          type: string
+          enum: [OK, WARN, ERROR]
+          example: "OK"
+        message:
+          type: string
+          example: "Base de cálculo válida"
+    BatchSummary:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum: [RECEIVED, PROCESSING, DONE, FAILED]
+        stats:
+          type: object
+          properties:
+            invoicesTotal:
+              type: integer
+              example: 100
+            invoicesOk:
+              type: integer
+              example: 96
+            invoicesWithIssues:
+              type: integer
+              example: 4
+            processingMsP95:
+              type: integer
+              example: 720
+        issuesSummary:
+          type: array
+          items:
+            $ref: "#/components/schemas/Issue"
+        validationsSample:
+          type: array
+          items:
+            $ref: "#/components/schemas/ValidationEntry"
+      required: [id, status, stats]

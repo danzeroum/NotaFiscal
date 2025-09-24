@@ -1,0 +1,102 @@
+{
+  "voter": "Architect",
+  "summary": "Arquitetura modular (hexagonal) em Java/Spring para pipeline NFe: Ingestão → Extração → Validação → Inconsistências → Exportação.",
+  "architecture_style": "modular_monolith",
+  "core_components": [
+    {
+      "name": "ingestion",
+      "responsibility": "Upload de ZIP com NFe (XML/PDF) e gerenciamento do lote",
+      "interfaces_in": [ "POST /batches", "GET /batches/{id}" ],
+      "interfaces_out": [ "domain events internos: BatchCreated" ]
+    },
+    {
+      "name": "extraction",
+      "responsibility": "Parse de XML NFe + OCR opcional para PDF",
+      "strategy": "XML parser nativo + adapter OCR (tess4j) com fallback",
+      "interfaces_in": [ "event: BatchCreated" ],
+      "interfaces_out": [ "ExtractedInvoice dto" ]
+    },
+    {
+      "name": "fiscal-validation",
+      "responsibility": "Regras básicas ICMS/IPI/ISS, conferência de totais",
+      "strategy": "Rule engine simples (services + tabela de regras) e validadores explícitos",
+      "interfaces_in": [ "ExtractedInvoice" ],
+      "interfaces_out": [ "ValidationReport dto" ]
+    },
+    {
+      "name": "anomaly-check",
+      "responsibility": "Detecção de erros comuns e outliers simples",
+      "strategy": "Heurísticas determinísticas (ex: soma itens != total, CFOP inválido básico)",
+      "interfaces_in": [ "ValidationReport" ],
+      "interfaces_out": [ "IssuesList" ]
+    },
+    {
+      "name": "export",
+      "responsibility": "Geração de Excel padrão ERP e endpoint de download",
+      "interfaces_in": [ "ValidationReport", "IssuesList" ],
+      "interfaces_out": [ "/batches/{id}/export.xlsx" ]
+    }
+  ],
+  "data_model_key_entities": [
+    "Batch(id, createdAt, status, stats)",
+    "Invoice(id, batchId, chave, emitente, destinatario, itens[], total, impostos)",
+    "ValidationReport(id, invoiceId, regrasAplicadas[], erros[], avisos[])",
+    "Issue(id, invoiceId, tipo, severidade, detalhe)"
+  ],
+  "integration_adapters": [
+    {
+      "name": "ocrAdapter",
+      "tech": "tess4j",
+      "note": "Ativar somente se PDF não contiver XML embutido"
+    },
+    {
+      "name": "excelAdapter",
+      "tech": "Apache POI",
+      "note": "Template simples compatível com ERP genérico"
+    },
+    {
+      "name": "sefazClientStub",
+      "tech": "RestTemplate/WebClient",
+      "note": "Stub configurável (feature flag) para demo"
+    }
+  ],
+  "transport_contracts": {
+    "rest": [
+      "POST /batches (multipart ZIP)",
+      "GET /batches/{id}",
+      "GET /batches/{id}/export.xlsx",
+      "GET /actuator/health"
+    ],
+    "error_format": "RFC 7807 (problem+json)"
+  },
+  "non_functional_requirements": {
+    "security": "sem dados sensíveis expostos; sanitização de logs",
+    "observability_min": "logs estruturados + actuator/health",
+    "performance": "P95 < 800ms por NFe (batch 100)",
+    "reliability": "reprocessamento idempotente por batch",
+    "scalability": "fila interna simples (executor) e partição por batch"
+  },
+  "decisions_and_tradeoffs": [
+    "Reusar ideias dos 10 repositórios como design (sem acoplar dependências Python no MVP Java).",
+    "OCR restrito ao mínimo necessário; preferir XML nativo.",
+    "Regra fiscal: escopo básico, explícito e testável; deixar estados/municípios complexos para fase 2."
+  ],
+  "excluded_now": [
+    "multi-tenant",
+    "OpenTelemetry full",
+    "conectores ERP específicos",
+    "emissão/contingência SEFAZ"
+  ],
+  "adrs_todo": [
+    "ADR-001: Parser XML e fallback OCR",
+    "ADR-002: Estratégia de validação fiscal básica",
+    "ADR-003: Formato do Excel de exportação",
+    "ADR-004: Política de logs e privacidade (LGPD)"
+  ],
+  "acceptance_criteria": [
+    "Processar ZIP com 100 NFe mistas (XML/PDF)",
+    "Gerar relatório de validação e inconsistências",
+    "Exportar Excel",
+    "OpenAPI mínima e RFC 7807 presentes"
+  ]
+}

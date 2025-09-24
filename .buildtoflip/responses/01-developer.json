@@ -1,0 +1,102 @@
+{
+  "voter": "Developer",
+  "stack": {
+    "language": "Java 21",
+    "framework": "Spring Boot 3.x",
+    "build": "Maven",
+    "db": "H2 (MVP)",
+    "libs": [
+      "spring-boot-starter-web",
+      "spring-boot-starter-validation",
+      "spring-boot-starter-actuator",
+      "tess4j (opcional OCR)",
+      "Apache POI (Excel)"
+    ]
+  },
+  "module_structure": {
+    "package": "br.com.nfe.processor",
+    "layers": [
+      "core.domain.{model,repository,service}",
+      "adapter.in.web",
+      "adapter.out.{persistence,ocr,excel,sefaz}",
+      "config",
+      "exception"
+    ]
+  },
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/batches",
+      "desc": "Upload de ZIP com NFe (XML/PDF); retorna id do lote",
+      "request": "multipart/form-data (file)",
+      "response": "201 { id, status }",
+      "errors": [ "400 problem+json (arquivo inválido)", "422 problem+json (conteúdo inválido)" ]
+    },
+    {
+      "method": "GET",
+      "path": "/batches/{id}",
+      "desc": "Status do processamento + sumário (qtde, erros, avisos)",
+      "response": "200 { id, status, stats, issuesSummary }",
+      "errors": [ "404 problem+json" ]
+    },
+    {
+      "method": "GET",
+      "path": "/batches/{id}/export.xlsx",
+      "desc": "Exporta planilha consolidada para ERP",
+      "response": "200 (attachment)",
+      "errors": [ "404 problem+json", "409 problem+json (batch não finalizado)" ]
+    },
+    {
+      "method": "GET",
+      "path": "/actuator/health",
+      "desc": "Healthcheck",
+      "response": "200 { status: 'UP' }"
+    }
+  ],
+  "processing_pipeline": [
+    "Descompactar ZIP",
+    "Para cada arquivo: (a) se XML → parse; (b) se PDF → tentar extrair XML; se não, OCR com heurísticas mínimas",
+    "Construir Invoice",
+    "Validar impostos e totais (regras básicas)",
+    "Detectar inconsistências (heurísticas)",
+    "Persistir entidades do lote",
+    "Disponibilizar export.xlsx"
+  ],
+  "openapi_minimal": {
+    "file": "docs/API/openapi.yaml",
+    "must_contain": [
+      "POST /batches",
+      "GET /batches/{id}",
+      "GET /batches/{id}/export.xlsx",
+      "RFC7807 schemas"
+    ]
+  },
+  "error_handling": "GlobalExceptionHandler com ProblemDetail (RFC 7807), traceId (MDC), instance",
+  "tests": {
+    "unit": [
+      "XMLParserServiceTest (positivo/negativo)",
+      "FiscalValidationServiceTest (positivo/negativo)",
+      "AnomalyServiceTest (negativo com soma divergente)"
+    ],
+    "integration": [
+      "BatchControllerIT: upload ZIP real com 2 XML válidos + 1 PDF sem XML (OCR desativado – espera 422)"
+    ]
+  },
+  "observability_min": [
+    "logs estruturados (info/error)",
+    "actuator/health",
+    "@Timed opcional no endpoint POST /batches"
+  ],
+  "dev_notes": [
+    "Manter regras explícitas por classe (Single Responsibility).",
+    "Feature flag para OCR e SEFAZ stub via properties.",
+    "Excel: sheet única com colunas: chave, emitente, destinatario, qtde_itens, total, icms, ipi, iss, erros, avisos."
+  ],
+  "acceptance_checklist": [
+    "Projeto roda com `./mvnw spring-boot:run`",
+    "Upload processa 100 NFe < 2 min em dev",
+    "Excel gerado e baixável",
+    "OpenAPI e RFC 7807 presentes",
+    "1 teste negativo por must_have"
+  ]
+}

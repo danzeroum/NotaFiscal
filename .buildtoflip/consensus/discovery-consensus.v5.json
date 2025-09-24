@@ -1,0 +1,96 @@
+{
+  "project": {
+    "name": "nfe-processor",
+    "domain": "fiscal-docs",
+    "profile": "MVP",
+    "stack": [ "Java 21", "Spring Boot 3", "Maven", "H2" ]
+  },
+  "voices_votes": {
+    "human": {
+      "level": "lite",
+      "must_have": [
+        "upload_lote_nfe",
+        "extracao_campos_basicos",
+        "validacao_fiscal_basica",
+        "detector_inconsistencias_simples",
+        "export_excel_padrao_erp",
+        "healthcheck_e_logs"
+      ],
+      "nice_to_have": [
+        "integracao_sefaz_stub",
+        "classificacao_inteligente_plano_contas",
+        "RAG_basico_para_legislacao",
+        "dashboard_minimo",
+        "api_rate_limit_e_retry_padroes"
+      ],
+      "reason": "Valor imediato com pipeline NFe fim-a-fim e exportação ERP."
+    },
+    "architect": {
+      "level": "lite",
+      "reason": "Monólito modular com pipeline Ingest→Extract→Validate→Issues→Export; ADRs mínimas.",
+      "notes": [ "Hexagonal mínima", "OCR sob feature flag", "Regra fiscal básica e explícita" ]
+    },
+    "developer": {
+      "level": "lite",
+      "reason": "Entrega rápida com testes e RFC 7807. OpenAPI mínima e Excel Apache POI.",
+      "notes": [ "Endpoints /batches", "Parser XML + fallback OCR opcional", "Planilha única" ]
+    },
+    "auditor": {
+      "level": "lite",
+      "reason": "Critérios auditáveis: RFC 7807, testes negativos por must_have, P95 < 800ms/lote.",
+      "notes": [ "NO-GO sem OpenAPI", "NO-GO se Excel não reconcilia totais" ]
+    }
+  },
+  "consensus": {
+    "foundation_level": "lite",
+    "rule": "fast-majority",
+    "enabled_modules": [
+      "core-pipeline",
+      "security-basic (mínimo)",
+      "observability-basic (logs + actuator/health)"
+    ],
+    "deferred_modules": [
+      {
+        "module": "sefaz-integration-real",
+        "trigger": "buyer-request",
+        "effort_days": 5,
+        "roi_impact": "medium"
+      },
+      {
+        "module": "rag-compliance",
+        "trigger": "escopo-legal-ampliado",
+        "effort_days": 4,
+        "roi_impact": "low"
+      },
+      {
+        "module": "ml-categorization",
+        "trigger": "volume>10k/mês",
+        "effort_days": 6,
+        "roi_impact": "medium"
+      },
+      {
+        "module": "otel-full",
+        "trigger": "contrato-enterprise",
+        "effort_days": 3,
+        "roi_impact": "medium"
+      }
+    ],
+    "quality_gates": [
+      "README < 5min",
+      "OpenAPI mínima presente",
+      "RFC 7807 implementado",
+      "1 teste positivo + 1 negativo por must_have",
+      "Excel reconcilia totais/impostos"
+    ]
+  },
+  "risks": [
+    "variações de layout NFe e regras estaduais",
+    "qualidade de PDFs para OCR",
+    "divergência de planilha ERP do cliente"
+  ],
+  "mitigations": [
+    "priorizar XML nativo; OCR sob flag",
+    "documentar escopo fiscal do MVP nas ADRs",
+    "validar template Excel com buyer antes do demo"
+  ]
+}
