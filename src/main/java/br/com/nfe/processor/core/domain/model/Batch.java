@@ -11,6 +11,8 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.HashSet; // IMPORTANTE
+import java.util.Set;
 
 @Entity
 @Table(name = "batches")
@@ -43,13 +45,13 @@ public class Batch {
     private Integer invoicesWithIssues;
 
     @OneToMany(mappedBy = "batch", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<Invoice> invoices = new ArrayList<>();
+    private Set<Invoice> invoices = new HashSet<>();
 
     @OneToMany(mappedBy = "batch", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<Issue> issues = new ArrayList<>();
+    private Set<Issue> issues = new HashSet<>();
 
     @OneToMany(mappedBy = "batch", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<ValidationReport> validations = new ArrayList<>();
+    private Set<ValidationReport> validations = new HashSet<>();
 
     public String getId() {
         return id;
@@ -115,15 +117,15 @@ public class Batch {
         this.invoicesWithIssues = invoicesWithIssues;
     }
 
-    public List<Invoice> getInvoices() {
+    public Set<Invoice> getInvoices() {
         return invoices;
     }
 
-    public List<Issue> getIssues() {
+    public Set<Issue> getIssues() {
         return issues;
     }
 
-    public List<ValidationReport> getValidations() {
+    public Set<ValidationReport> getValidations() {
         return validations;
     }
 }
