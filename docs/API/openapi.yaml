@@ -3,12 +3,44 @@ info:
   title: NFe Processor API
   version: "0.1.0"
   description: >
-    API mÌnima do MVP para processamento de NFe em lote (ZIP com XML/PDF),
-    validaÁ„o fiscal b·sica, detecÁ„o de inconsistÍncias e exportaÁ„o para Excel.
+    API m√≠nima do MVP para processamento de NFe em lote (ZIP com XML/PDF),
+    valida√ß√£o fiscal b√°sica, detec√ß√£o de inconsist√™ncias e exporta√ß√£o para Excel.
 servers:
   - url: http://localhost:8080
 paths:
   /batches:
+    get:
+      summary: Lista lotes paginados
+      operationId: listBatches
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+          description: N√∫mero da p√°gina (0-indexado)
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+          description: Quantidade de itens por p√°gina
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Campo de ordena√ß√£o (ex. `receivedAt,desc`)
+      responses:
+        "200":
+          description: P√°gina de lotes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BatchSummaryPage"
     post:
       summary: Cria um novo lote de processamento de NFe a partir de um arquivo ZIP
       operationId: createBatch
@@ -35,13 +67,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/BatchCreated"
         "400":
-          description: RequisiÁ„o inv·lida (arquivo ausente, formato incorreto)
+          description: Requisi√ß√£o inv√°lida (arquivo ausente, formato incorreto)
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/Problem"
         "422":
-          description: Conte˙do inv·lido (ZIP corrompido, PDFs ilegÌveis, etc.)
+          description: Conte√∫do inv√°lido (ZIP corrompido, PDFs ileg√≠veis, etc.)
           content:
             application/problem+json:
               schema:
@@ -49,7 +81,7 @@ paths:
 
   /batches/{id}:
     get:
-      summary: Consulta o status e o sum·rio do lote
+      summary: Consulta o status e o sum√°rio do lote
       operationId: getBatch
       parameters:
         - name: id
@@ -59,13 +91,13 @@ paths:
             type: string
       responses:
         "200":
-          description: Sum·rio do lote
+          description: Sum√°rio do lote
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/BatchSummary"
         "404":
-          description: Lote n„o encontrado
+          description: Lote n√£o encontrado
           content:
             application/problem+json:
               schema:
@@ -95,13 +127,13 @@ paths:
                 type: string
                 format: binary
         "404":
-          description: Lote n„o encontrado
+          description: Lote n√£o encontrado
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/Problem"
         "409":
-          description: Lote ainda em processamento; exportaÁ„o n„o disponÌvel
+          description: Lote ainda em processamento; exporta√ß√£o n√£o dispon√≠vel
           content:
             application/problem+json:
               schema:
@@ -115,7 +147,7 @@ components:
       properties:
         type:
           type: string
-          description: URI de identificaÁ„o do tipo de problema
+          description: URI de identifica√ß√£o do tipo de problema
           example: "https://example.com/problems/validation-error"
         title:
           type: string
@@ -172,7 +204,7 @@ components:
           example: "OK"
         message:
           type: string
-          example: "Base de c·lculo v·lida"
+          example: "Base de c√°lculo v√°lida"
     BatchSummary:
       type: object
       properties:
@@ -181,6 +213,12 @@ components:
         status:
           type: string
           enum: [RECEIVED, PROCESSING, DONE, FAILED]
+        receivedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
         stats:
           type: object
           properties:
@@ -205,3 +243,41 @@ components:
           items:
             $ref: "#/components/schemas/ValidationEntry"
       required: [id, status, stats]
+    BatchSummaryPage:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/BatchSummary"
+        totalElements:
+          type: integer
+          example: 12
+        totalPages:
+          type: integer
+          example: 3
+        size:
+          type: integer
+          example: 5
+        number:
+          type: integer
+          example: 0
+        first:
+          type: boolean
+        last:
+          type: boolean
+        numberOfElements:
+          type: integer
+        sort:
+          type: object
+          properties:
+            sorted:
+              type: boolean
+            unsorted:
+              type: boolean
+            empty:
+              type: boolean
+        pageable:
+          type: object
+          description: Metadados de pagina√ß√£o no padr√£o Spring Data
+      required: [content]

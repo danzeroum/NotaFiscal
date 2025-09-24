@@ -8,14 +8,21 @@ import br.com.nfe.processor.adapter.in.web.dto.ValidationEntryResponse;
 import br.com.nfe.processor.adapter.out.excel.ExcelExportService;
 import br.com.nfe.processor.core.domain.model.Batch;
 import br.com.nfe.processor.core.domain.model.BatchStatus;
+import br.com.nfe.processor.core.domain.model.Issue;
 import br.com.nfe.processor.core.domain.model.ValidationReport;
 import br.com.nfe.processor.core.domain.repository.BatchRepository;
 import br.com.nfe.processor.core.domain.service.ZipIngestionService;
 import br.com.nfe.processor.exception.ConflictException;
 import br.com.nfe.processor.exception.NotFoundException;
 import jakarta.validation.constraints.NotNull;
+import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -57,23 +64,17 @@ public class BatchController {
         return new BatchCreatedResponse(batch.getId(), batch.getStatus(), batch.getReceivedAt());
     }
 
+    @GetMapping
+    public Page<BatchSummaryResponse> listBatches(
+            @PageableDefault(sort = "receivedAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        return batchRepository.findAllBy(pageable).map(batch -> toBatchSummary(batch, 3, 0));
+    }
+
     @GetMapping("/{id}")
     public BatchSummaryResponse getBatch(@PathVariable("id") String id) {
         Batch batch = batchRepository.findWithDetailsById(id)
                 .orElseThrow(() -> new NotFoundException("Lote não encontrado"));
-        BatchStatsResponse stats = new BatchStatsResponse(
-                defaultInt(batch.getInvoicesTotal()),
-                defaultInt(batch.getInvoicesOk()),
-                defaultInt(batch.getInvoicesWithIssues()),
-                defaultLong(batch.getProcessingMsP95()));
-        List<IssueResponse> issueResponses = batch.getIssues().stream()
-                .map(issue -> new IssueResponse(issue.getType(), issue.getSeverity(), issue.getDetail()))
-                .collect(Collectors.toList());
-        List<ValidationEntryResponse> validations = batch.getValidations().stream()
-                .limit(10)
-                .map(this::toValidationEntry)
-                .collect(Collectors.toList());
-        return new BatchSummaryResponse(batch.getId(), batch.getStatus(), stats, issueResponses, validations);
+        return toBatchSummary(batch, -1, 10);
     }
 
     @GetMapping("/{id}/export.xlsx")
@@ -91,15 +92,49 @@ public class BatchController {
                 .body(file);
     }
 
-    private ValidationEntryResponse toValidationEntry(ValidationReport report) {
-        return new ValidationEntryResponse(report.getRule(), report.getResult(), report.getMessage());
-    }
-
     private int defaultInt(Integer value) {
         return value == null ? 0 : value;
     }
 
     private long defaultLong(Long value) {
         return value == null ? 0L : value;
+    }
+
+    private BatchSummaryResponse toBatchSummary(Batch batch, int issueLimit, int validationLimit) {
+        BatchStatsResponse stats = new BatchStatsResponse(
+                defaultInt(batch.getInvoicesTotal()),
+                defaultInt(batch.getInvoicesOk()),
+                defaultInt(batch.getInvoicesWithIssues()),
+                defaultLong(batch.getProcessingMsP95()));
+
+        Stream<Issue> issueStream = batch.getIssues().stream()
+                .sorted(Comparator.comparing(Issue::getSeverity).reversed());
+        if (issueLimit >= 0) {
+            issueStream = issueStream.limit(issueLimit);
+        }
+        List<IssueResponse> issueResponses = issueStream
+                .map(issue -> new IssueResponse(issue.getType(), issue.getSeverity(), issue.getDetail()))
+                .collect(Collectors.toList());
+
+        Stream<ValidationReport> validationStream = batch.getValidations().stream();
+        if (validationLimit >= 0) {
+            validationStream = validationStream.limit(validationLimit);
+        }
+        List<ValidationEntryResponse> validations = validationStream
+                .map(this::toValidationEntry)
+                .collect(Collectors.toList());
+
+        return new BatchSummaryResponse(
+                batch.getId(),
+                batch.getStatus(),
+                batch.getReceivedAt(),
+                batch.getCompletedAt(),
+                stats,
+                issueResponses,
+                validations);
+    }
+
+    private ValidationEntryResponse toValidationEntry(ValidationReport report) {
+        return new ValidationEntryResponse(report.getRule(), report.getResult(), report.getMessage());
     }
 }
