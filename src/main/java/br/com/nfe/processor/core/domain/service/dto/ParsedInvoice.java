@@ -1,11 +1,12 @@
 package br.com.nfe.processor.core.domain.service.dto;
 
+import br.com.nfe.processor.core.domain.valueobject.Cnpj;
 import java.math.BigDecimal;
 
 public class ParsedInvoice {
     private final String accessKey;
     private final String emitterName;
-    private final String emitterTaxId;
+    private final Cnpj emitterTaxId;
     private final String recipientName;
     private final String recipientTaxId;
     private final int itemCount;
@@ -19,7 +20,7 @@ public class ParsedInvoice {
     public ParsedInvoice(
             String accessKey,
             String emitterName,
-            String emitterTaxId,
+            Cnpj emitterTaxId,
             String recipientName,
             String recipientTaxId,
             int itemCount,
@@ -51,7 +52,7 @@ public class ParsedInvoice {
         return emitterName;
     }
 
-    public String getEmitterTaxId() {
+    public Cnpj getEmitterTaxId() {
         return emitterTaxId;
     }
 
