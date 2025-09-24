@@ -9,9 +9,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.HashSet; // IMPORTANTE
+import java.util.HashSet;
 import java.util.Set;
 
 @Entity
@@ -45,13 +43,13 @@ public class Batch {
     private Integer invoicesWithIssues;
 
     @OneToMany(mappedBy = "batch", cascade = CascadeType.ALL, orphanRemoval = true)
-    private Set<Invoice> invoices = new HashSet<>();
+    private final Set<Invoice> invoices = new HashSet<>();
 
     @OneToMany(mappedBy = "batch", cascade = CascadeType.ALL, orphanRemoval = true)
-    private Set<Issue> issues = new HashSet<>();
+    private final Set<Issue> issues = new HashSet<>();
 
     @OneToMany(mappedBy = "batch", cascade = CascadeType.ALL, orphanRemoval = true)
-    private Set<ValidationReport> validations = new HashSet<>();
+    private final Set<ValidationReport> validations = new HashSet<>();
 
     public String getId() {
         return id;
