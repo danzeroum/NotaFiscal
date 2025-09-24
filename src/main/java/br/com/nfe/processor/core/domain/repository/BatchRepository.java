@@ -12,6 +12,6 @@ public interface BatchRepository extends JpaRepository<Batch, String> {
     @EntityGraph(attributePaths = {"invoices", "issues", "validations", "invoices.issues"})
     Optional<Batch> findWithDetailsById(String id);
 
-    @EntityGraph(attributePaths = {"issues"})
+    @EntityGraph(attributePaths = {"issues", "invoices", "invoices.issues"})
     Page<Batch> findAllBy(Pageable pageable);
 }
