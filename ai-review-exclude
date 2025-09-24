@@ -1,0 +1,10 @@
+samples/*.zip
+*.png
+*.pdf
+*.xlsx
+target/
+.idea/
+.vscode/
+.secrets*
+.env*
+application-*.yml
