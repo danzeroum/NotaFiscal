@@ -52,9 +52,16 @@ Após executar o script, os seguintes pacotes ficam disponíveis em `samples/`:
 - `bad-totals.zip` — divergência de totais detectada
 - `pdf-no-xml.zip` — contém apenas PDF (falha quando OCR está desabilitado)
 
-## 🔐 Feature Flags
+## 🔐 Feature Flags e Integrações
 - `ocr.enabled=false` (padrão) — ativa integração experimental via Tess4J
-- `sefaz.stub.enabled=true` — stub de validação de chave NFe para ambiente demo
+- `sefaz.stub.enabled=true` — mantém o modo demo que não realiza chamadas reais à SEFAZ
+- Para habilitar a consulta real configure as variáveis de ambiente:
+  - `SEFAZ_CERT_PATH` — caminho absoluto do certificado digital A1 (formato `.p12`)
+  - `SEFAZ_CERT_PASSWORD` — senha do certificado digital
+  - `SEFAZ_ENV` — ambiente da SEFAZ (`homolog` ou `prod`)
+  - Opcional: `sefaz.endpoint` caso precise apontar para uma URL customizada de webservice
+
+A integração real utiliza cliente SOAP (Spring Web Services) com certificado A1, timeouts de 3 segundos e circuit breaker (`resilience4j`) para degradar em caso de indisponibilidade.
 
 ## 🧠 Configuração do Tesseract
 - O OCR real exige os arquivos `.traineddata` disponíveis no contêiner (copiados no build).
@@ -63,7 +70,7 @@ Após executar o script, os seguintes pacotes ficam disponíveis em `samples/`:
 - Para apontar para um local customizado, ajuste a propriedade/variável para ficar dentro de um desses diretórios ou adicione um *bind mount* que respeite o caminho permitido.
 
 ## 🔎 Observabilidade
-- Healthcheck: `GET /actuator/health`
+- Healthcheck: `GET /actuator/health` — inclui verificação do OCR e validade do certificado SEFAZ
 - Todos os erros seguem RFC 7807 com `traceId` correlacionado via MDC (`X-Trace-Id`).
 
 ## 📄 Contrato

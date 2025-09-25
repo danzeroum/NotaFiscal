@@ -2,6 +2,7 @@ package br.com.nfe.processor.unit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import br.com.nfe.processor.adapter.out.sefaz.SefazStatus;
 import br.com.nfe.processor.core.domain.model.Batch;
 import br.com.nfe.processor.core.domain.model.Invoice;
 import br.com.nfe.processor.core.domain.model.IssueType;
@@ -33,7 +34,7 @@ class AnomalyServiceTest {
         invoice.setCfop("5102");
         List<ValidationResult> validations = List.of(
                 new ValidationResult("TOTALS_RECONCILIATION", ValidationResultType.ERROR, "Mismatch"));
-        assertThat(service.detect(batch, invoice, validations, true))
+        assertThat(service.detect(batch, invoice, validations, SefazStatus.AUTORIZADA))
                 .anySatisfy(issue -> assertThat(issue.getType()).isEqualTo(IssueType.TOTALS_MISMATCH));
     }
 
@@ -43,7 +44,16 @@ class AnomalyServiceTest {
         invoice.setCfop("5102");
         List<ValidationResult> validations = List.of(
                 new ValidationResult("TOTALS_RECONCILIATION", ValidationResultType.OK, "Ok"));
-        assertThat(service.detect(batch, invoice, validations, true)).isEmpty();
+        assertThat(service.detect(batch, invoice, validations, SefazStatus.AUTORIZADA)).isEmpty();
+    }
+
+    @Test
+    void shouldReportSefazIssuesWhenCancelled() {
+        Invoice invoice = invoice();
+        invoice.setCfop("5102");
+        List<ValidationResult> validations = List.of();
+        assertThat(service.detect(batch, invoice, validations, SefazStatus.CANCELADA))
+                .anySatisfy(issue -> assertThat(issue.getType()).isEqualTo(IssueType.SEFAZ_KEY_INVALID));
     }
 
     private Invoice invoice() {

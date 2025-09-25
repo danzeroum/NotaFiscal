@@ -1,5 +1,6 @@
 package br.com.nfe.processor.core.domain.service;
 
+import br.com.nfe.processor.adapter.out.sefaz.SefazStatus;
 import br.com.nfe.processor.core.domain.model.Batch;
 import br.com.nfe.processor.core.domain.model.Invoice;
 import br.com.nfe.processor.core.domain.model.Issue;
@@ -14,20 +15,38 @@ import org.springframework.stereotype.Service;
 @Service
 public class AnomalyService {
 
-    public List<Issue> detect(Batch batch, Invoice invoice, List<ValidationResult> validations, boolean sefazValid) {
+    public List<Issue> detect(
+            Batch batch, Invoice invoice, List<ValidationResult> validations, SefazStatus sefazStatus) {
         List<Issue> issues = new ArrayList<>();
         validations.stream()
                 .filter(result -> result.getResult() == ValidationResultType.ERROR)
                 .forEach(result -> issues.add(buildValidationIssue(batch, invoice, result)));
 
-        if (!sefazValid) {
-            issues.add(createIssue(batch, invoice, IssueType.SEFAZ_KEY_INVALID, IssueSeverity.HIGH,
-                    "Chave de acesso inválida para ambiente demo"));
-        }
+        issues.addAll(buildSefazIssues(batch, invoice, sefazStatus));
 
         if (invoice.getCfop() == null || invoice.getCfop().length() != 4) {
             issues.add(createIssue(
                     batch, invoice, IssueType.CFOP_INVALID, IssueSeverity.MEDIUM, "CFOP ausente ou inválido"));
+        }
+        return issues;
+    }
+
+    private List<Issue> buildSefazIssues(Batch batch, Invoice invoice, SefazStatus status) {
+        List<Issue> issues = new ArrayList<>();
+        if (status == null) {
+            return issues;
+        }
+        switch (status) {
+            case AUTORIZADA -> {
+            }
+            case CANCELADA -> issues.add(createIssue(batch, invoice, IssueType.SEFAZ_KEY_INVALID, IssueSeverity.HIGH,
+                    "Nota fiscal cancelada na SEFAZ"));
+            case DENEGADA -> issues.add(createIssue(batch, invoice, IssueType.SEFAZ_KEY_INVALID, IssueSeverity.HIGH,
+                    "Uso da chave negado pela SEFAZ"));
+            case INEXISTENTE -> issues.add(createIssue(batch, invoice, IssueType.SEFAZ_KEY_INVALID, IssueSeverity.HIGH,
+                    "Chave de acesso não encontrada na SEFAZ"));
+            case INDISPONIVEL -> issues.add(createIssue(batch, invoice, IssueType.SEFAZ_KEY_INVALID, IssueSeverity.MEDIUM,
+                    "SEFAZ indisponível no momento da consulta"));
         }
         return issues;
     }
