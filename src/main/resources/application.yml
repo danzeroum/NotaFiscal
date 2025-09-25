@@ -20,6 +20,12 @@ spring:
   devtools:
     restart:
       enabled: false
+  task:
+    execution:
+      pool:
+        core-size: 2
+        max-size: 10
+        queue-capacity: 100
 
 server:
   error:
@@ -33,6 +39,10 @@ management:
 
 ocr:
   enabled: false
+  tessdata-path: /usr/share/tessdata
+  fallback:
+    emitter-cnpj: 27865757000102
+    recipient-tax-id: 12345678909
 
 sefaz:
   stub:
