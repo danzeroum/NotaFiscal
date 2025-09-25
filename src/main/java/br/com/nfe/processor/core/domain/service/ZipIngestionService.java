@@ -4,6 +4,9 @@ import br.com.nfe.processor.adapter.out.ocr.OcrAdapter;
 import br.com.nfe.processor.adapter.out.sefaz.SefazVerificationClient;
 import br.com.nfe.processor.core.domain.model.Batch;
 import br.com.nfe.processor.core.domain.model.BatchStatus;
+import br.com.nfe.processor.core.domain.model.Issue;
+import br.com.nfe.processor.core.domain.model.IssueSeverity;
+import br.com.nfe.processor.core.domain.model.IssueType;
 import br.com.nfe.processor.core.domain.model.Invoice;
 import br.com.nfe.processor.core.domain.model.ValidationReport;
 import br.com.nfe.processor.core.domain.repository.BatchRepository;
@@ -19,6 +22,8 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import org.slf4j.Logger;
@@ -73,8 +78,8 @@ public class ZipIngestionService {
             batch.setStatus(BatchStatus.PROCESSING);
             batchRepository.save(batch);
 
-            List<String> xmlContents = new ArrayList<>();
-            List<String> pdfEntries = new ArrayList<>();
+            List<InvoicePayload> invoicePayloads = new ArrayList<>();
+            List<CompletableFuture<InvoicePayload>> asyncPayloads = new ArrayList<>();
             try (ZipInputStream zipInputStream = new ZipInputStream(file.getInputStream())) {
                 ZipEntry entry;
                 while ((entry = zipInputStream.getNextEntry()) != null) {
@@ -83,11 +88,12 @@ public class ZipIngestionService {
                     }
                     String name = entry.getName();
                     if (name.endsWith(".xml")) {
-                        xmlContents.add(readEntry(zipInputStream));
+                        invoicePayloads.add(new InvoicePayload(readEntry(zipInputStream), false));
                         zipInputStream.closeEntry();
-                    }else if (name.endsWith(".pdf") || name.endsWith(".png") || name.endsWith(".jpg")) { // Adiciona novas extensões
-                        handleImageEntry(zipInputStream, name, xmlContents, ocrRequested); // Renomeia o método para ser mais genérico
-                        zipInputStream.closeEntry();} else {
+                    } else if (name.endsWith(".pdf") || name.endsWith(".png") || name.endsWith(".jpg")) {
+                        asyncPayloads.add(handleImageEntry(zipInputStream, name, ocrRequested));
+                        zipInputStream.closeEntry();
+                    } else {
                         throw new UnprocessableEntityException("Extensão não suportada: " + name);
                     }
                 }
@@ -95,13 +101,15 @@ public class ZipIngestionService {
                 throw new UnprocessableEntityException("Falha ao ler arquivo ZIP");
             }
 
-            if (xmlContents.isEmpty()) {
+            invoicePayloads.addAll(resolveAsyncOcrResults(asyncPayloads));
+
+            if (invoicePayloads.isEmpty()) {
                 throw new UnprocessableEntityException("Nenhum XML de NFe encontrado no lote");
             }
 
-            processXmlInvoices(batch, xmlContents);
+            processXmlInvoices(batch, invoicePayloads);
             finalizeBatch(batch, start);
-            LOGGER.info("Lote {} processado com {} notas e {} PDFs", batch.getId(), batch.getInvoices().size(), pdfEntries.size());
+            LOGGER.info("Lote {} processado com {} notas ({} via OCR)", batch.getId(), batch.getInvoices().size(), invoicePayloads.stream().filter(InvoicePayload::ocrProcessed).count());
             return batch;
         } catch (RuntimeException ex) {
             batch.setStatus(BatchStatus.FAILED);
@@ -128,8 +136,8 @@ public class ZipIngestionService {
         return out.toString(StandardCharsets.UTF_8);
     }
 
-    private void handleImageEntry (ZipInputStream inputStream, String name, List<String> xmlContents, boolean ocrRequested)
-            throws IOException {
+    private CompletableFuture<InvoicePayload> handleImageEntry(
+            ZipInputStream inputStream, String name, boolean ocrRequested) throws IOException {
         ByteArrayOutputStream buffer = new ByteArrayOutputStream();
         byte[] data = new byte[4096];
         int read;
@@ -140,19 +148,39 @@ public class ZipIngestionService {
         if (!ocrEnabled || !ocrRequested) {
             throw new UnprocessableEntityException("OCR desabilitado: PDF " + name + " não pode ser processado");
         }
-        ocrAdapter.extractXml(content)
-                .ifPresentOrElse(xmlContents::add, () -> {
-                    throw new UnprocessableEntityException("OCR não conseguiu extrair XML do PDF " + name);
-                });
+        return ocrAdapter.extractXml(content).thenApply(optional -> optional
+                .map(xml -> new InvoicePayload(xml, true))
+                .orElseThrow(() -> new UnprocessableEntityException(
+                        "OCR não conseguiu extrair XML do arquivo " + name)));
     }
 
-    private void processXmlInvoices(Batch batch, List<String> xmlContents) {
-        xmlContents.stream()
-                .map(xmlParserService::parse)
-                .forEach(parsed -> buildInvoice(batch, parsed));
+    private List<InvoicePayload> resolveAsyncOcrResults(List<CompletableFuture<InvoicePayload>> asyncPayloads) {
+        List<InvoicePayload> resolved = new ArrayList<>();
+        for (CompletableFuture<InvoicePayload> future : asyncPayloads) {
+            try {
+                resolved.add(future.get());
+            } catch (InterruptedException ex) {
+                Thread.currentThread().interrupt();
+                throw new UnprocessableEntityException("Processamento OCR interrompido");
+            } catch (ExecutionException ex) {
+                Throwable cause = ex.getCause();
+                if (cause instanceof UnprocessableEntityException exception) {
+                    throw exception;
+                }
+                throw new UnprocessableEntityException("Falha ao processar OCR: " + cause.getMessage());
+            }
+        }
+        return resolved;
     }
 
-    private void buildInvoice(Batch batch, ParsedInvoice parsed) {
+    private void processXmlInvoices(Batch batch, List<InvoicePayload> payloads) {
+        payloads.forEach(payload -> {
+            ParsedInvoice parsed = xmlParserService.parse(payload.xmlContent());
+            buildInvoice(batch, parsed, payload.ocrProcessed());
+        });
+    }
+
+    private void buildInvoice(Batch batch, ParsedInvoice parsed, boolean ocrProcessed) {
         Invoice invoice = new Invoice();
         invoice.setBatch(batch);
         invoice.setAccessKey(parsed.getAccessKey());
@@ -167,6 +195,7 @@ public class ZipIngestionService {
         invoice.setIpiAmount(parsed.getIpiAmount());
         invoice.setIssAmount(parsed.getIssAmount() != null ? parsed.getIssAmount() : BigDecimal.ZERO);
         invoice.setCfop(parsed.getCfop());
+        invoice.setOcrProcessed(ocrProcessed);
 
         List<ValidationResult> validations = fiscalValidationService.validate(invoice);
         validations.forEach(result -> {
@@ -182,7 +211,23 @@ public class ZipIngestionService {
                     invoice.getIssues().add(issue);
                 });
 
+        if (invoice.isOcrProcessed()) {
+            Issue ocrIssue = buildOcrIssue(batch, invoice);
+            batch.getIssues().add(ocrIssue);
+            invoice.getIssues().add(ocrIssue);
+        }
+
         batch.getInvoices().add(invoice);
+    }
+
+    private Issue buildOcrIssue(Batch batch, Invoice invoice) {
+        Issue issue = new Issue();
+        issue.setBatch(batch);
+        issue.setInvoice(invoice);
+        issue.setType(IssueType.OCR_REQUIRED);
+        issue.setSeverity(IssueSeverity.MEDIUM);
+        issue.setDetail("Dados extraídos via OCR, verificação manual recomendada");
+        return issue;
     }
 
     private ValidationReport toValidationReport(Batch batch, Invoice invoice, ValidationResult validationResult) {
@@ -207,4 +252,6 @@ public class ZipIngestionService {
         batch.setStatus(BatchStatus.DONE);
         batchRepository.save(batch);
     }
+
+    private record InvoicePayload(String xmlContent, boolean ocrProcessed) {}
 }

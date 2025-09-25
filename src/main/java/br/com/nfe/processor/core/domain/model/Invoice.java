@@ -63,6 +63,9 @@ public class Invoice {
     @Column(name = "cfop", length = 10)
     private String cfop;
 
+    @Column(name = "ocr_processed", nullable = false)
+    private boolean ocrProcessed = false;
+
     @OneToMany(mappedBy = "invoice")
     private List<Issue> issues = new ArrayList<>();
 
@@ -175,6 +178,14 @@ public class Invoice {
 
     public void setCfop(String cfop) {
         this.cfop = cfop;
+    }
+
+    public boolean isOcrProcessed() {
+        return ocrProcessed;
+    }
+
+    public void setOcrProcessed(boolean ocrProcessed) {
+        this.ocrProcessed = ocrProcessed;
     }
 
     public List<Issue> getIssues() {
