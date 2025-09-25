@@ -59,25 +59,22 @@ public class Tess4JOcrAdapter implements OcrAdapter {
     private final boolean ocrEnabled;
     private final String language;
     private final String tessdataPath;
-    private final String fallbackEmitterCnpj;
-    private final String fallbackRecipientTaxId;
+    private final int confidenceThreshold;
     private final ThreadLocal<Tesseract> tesseractHolder;
 
     public Tess4JOcrAdapter(
             @Value("${ocr.enabled:false}") boolean ocrEnabled,
             @Value("${ocr.language:por+eng}") String language,
             @Value("${ocr.tessdata-path:/usr/share/tessdata}") String tessdataPath,
-            @Value("${ocr.fallback.emitter-cnpj:27865757000102}") String fallbackEmitterCnpj,
-            @Value("${ocr.fallback.recipient-tax-id:12345678909}") String fallbackRecipientTaxId) {
+            @Value("${ocr.confidence-threshold:75}") int confidenceThreshold) {
         this.ocrEnabled = ocrEnabled;
         this.language = language;
         this.tessdataPath = tessdataPath;
-        this.fallbackEmitterCnpj = fallbackEmitterCnpj;
-        this.fallbackRecipientTaxId = fallbackRecipientTaxId;
+        this.confidenceThreshold = Math.max(0, Math.min(100, confidenceThreshold));
         this.tesseractHolder = ThreadLocal.withInitial(this::createEngine);
     }
 
-    @Async
+    @Async("ocrExecutor")
     @Override
     public CompletableFuture<Optional<String>> extractXml(byte[] fileContent) {
         if (!ocrEnabled) {
@@ -85,12 +82,17 @@ public class Tess4JOcrAdapter implements OcrAdapter {
             return CompletableFuture.completedFuture(Optional.empty());
         }
         try {
-            String text = extractText(fileContent);
-            if (text.isBlank()) {
+            OcrExtraction extraction = extractText(fileContent);
+            if (extraction.text().isBlank()) {
                 LOGGER.warn("OCR returned empty content");
                 return CompletableFuture.completedFuture(Optional.empty());
             }
-            Optional<String> xml = buildXmlFromText(text);
+            if (extraction.confidence() < confidenceThreshold) {
+                LOGGER.warn(
+                        "OCR confidence {} abaixo do limite {}", extraction.confidence(), confidenceThreshold);
+                return CompletableFuture.completedFuture(Optional.empty());
+            }
+            Optional<String> xml = buildXmlFromText(extraction.text());
             if (xml.isEmpty()) {
                 LOGGER.warn("OCR could not infer mandatory NFe fields");
             }
@@ -115,7 +117,7 @@ public class Tess4JOcrAdapter implements OcrAdapter {
         }
     }
 
-    private String extractText(byte[] content) throws IOException, TesseractException {
+    private OcrExtraction extractText(byte[] content) throws IOException, TesseractException {
         if (isPdf(content)) {
             return extractTextFromPdf(content);
         }
@@ -130,7 +132,7 @@ public class Tess4JOcrAdapter implements OcrAdapter {
                 && content[3] == 'F';
     }
 
-    private String extractTextFromPdf(byte[] pdf) throws IOException, TesseractException {
+    private OcrExtraction extractTextFromPdf(byte[] pdf) throws IOException, TesseractException {
         try (PDDocument document = Loader.loadPDF(pdf)) {
             PDFRenderer renderer = new PDFRenderer(document);
             List<BufferedImage> pages = new ArrayList<>();
@@ -141,7 +143,7 @@ public class Tess4JOcrAdapter implements OcrAdapter {
         }
     }
 
-    private String extractTextFromImage(byte[] imageBytes) throws IOException, TesseractException {
+    private OcrExtraction extractTextFromImage(byte[] imageBytes) throws IOException, TesseractException {
         try (ByteArrayInputStream inputStream = new ByteArrayInputStream(imageBytes)) {
             BufferedImage image = ImageIO.read(inputStream);
             if (image == null) {
@@ -151,13 +153,14 @@ public class Tess4JOcrAdapter implements OcrAdapter {
         }
     }
 
-    private String doOcr(List<BufferedImage> images) throws TesseractException {
+    private OcrExtraction doOcr(List<BufferedImage> images) throws TesseractException {
         StringBuilder builder = new StringBuilder();
         Tesseract tesseract = tesseractHolder.get();
         for (BufferedImage image : images) {
             builder.append(tesseract.doOCR(image)).append('\n');
         }
-        return builder.toString();
+        int confidence = Math.max(0, tesseract.getMeanConfidence());
+        return new OcrExtraction(builder.toString(), confidence);
     }
 
     private Tesseract createEngine() {
@@ -208,11 +211,15 @@ public class Tess4JOcrAdapter implements OcrAdapter {
         String emitterName = extractLabeledValue(normalizedText, "EMITENTE", "Emitente", "Emit:", "Emit");
         String recipientName = extractLabeledValue(normalizedText, "DESTINATÁRIO", "Destinatário", "Dest:", "Dest");
 
-        String emitterCnpj = extractDigits(CNPJ_PATTERN, normalizedText)
-                .orElse(fallbackEmitterCnpj);
-        String recipientTaxId = extractDigits(CPF_PATTERN, normalizedText)
-                .orElseGet(() -> extractSecondCnpj(normalizedText, emitterCnpj)
-                        .orElse(fallbackRecipientTaxId));
+        Optional<String> emitterCnpj = extractDigits(CNPJ_PATTERN, normalizedText);
+        if (emitterCnpj.isEmpty()) {
+            return Optional.empty();
+        }
+        Optional<String> recipientTaxId = extractDigits(CPF_PATTERN, normalizedText)
+                .or(() -> extractSecondCnpj(normalizedText, emitterCnpj.get()));
+        if (recipientTaxId.isEmpty()) {
+            return Optional.empty();
+        }
 
         BigDecimal totalAmount = findAmount(TOTAL_PATTERN, normalizedText).orElse(BigDecimal.ZERO);
         BigDecimal productsAmount = findAmount(PRODUCTS_PATTERN, normalizedText).orElse(totalAmount);
@@ -228,9 +235,9 @@ public class Tess4JOcrAdapter implements OcrAdapter {
         String xml = buildXml(
                 accessKey.get(),
                 emitterName,
-                emitterCnpj,
+                emitterCnpj.get(),
                 recipientName,
-                recipientTaxId,
+                recipientTaxId.get(),
                 productsAmount,
                 totalAmount,
                 icmsAmount,
@@ -410,4 +417,6 @@ public class Tess4JOcrAdapter implements OcrAdapter {
     private String defaultIfBlank(String value, String defaultValue) {
         return value == null || value.isBlank() ? defaultValue : value.trim();
     }
+
+    private record OcrExtraction(String text, int confidence) {}
 }
