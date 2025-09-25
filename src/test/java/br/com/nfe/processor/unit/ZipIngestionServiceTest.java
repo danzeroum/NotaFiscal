@@ -105,6 +105,25 @@ class ZipIngestionServiceTest {
                 .isEqualTo(true);
     }
 
+    @Test
+    void shouldProcessPdfWithOcrAndCreateIssue() throws Exception {
+        when(ocrAdapter.extractXml(any()))
+                .thenReturn(CompletableFuture.completedFuture(Optional.of(sampleXml())));
+
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "lote.zip", "application/zip", zipWith("arquivo.pdf", "pdf"));
+
+        Batch batch = serviceWithOcr.ingest(file, true);
+
+        assertThat(batch.getInvoices()).hasSize(1);
+        assertThat(batch.getInvoices().iterator().next().isOcrProcessed()).isTrue();
+        assertThat(batch.getIssues())
+                .anySatisfy(issue -> {
+                    assertThat(issue.getSeverity()).isEqualTo(IssueSeverity.MEDIUM);
+                    assertThat(issue.getDetail()).contains("Dados extraídos via OCR");
+                });
+    }
+
     private byte[] zipWith(String name, String content) {
         try {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
