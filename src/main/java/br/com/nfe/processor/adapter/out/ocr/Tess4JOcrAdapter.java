@@ -13,8 +13,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import com.google.re2j.Matcher;
+import com.google.re2j.Pattern;
 import javax.imageio.ImageIO;
 import net.sourceforge.tess4j.Tesseract;
 import net.sourceforge.tess4j.TesseractException;
@@ -61,6 +61,7 @@ public class Tess4JOcrAdapter implements OcrAdapter {
     private final String tessdataPath;
     private final String fallbackEmitterCnpj;
     private final String fallbackRecipientTaxId;
+    private final ThreadLocal<Tesseract> tesseractHolder;
 
     public Tess4JOcrAdapter(
             @Value("${ocr.enabled:false}") boolean ocrEnabled,
@@ -73,6 +74,7 @@ public class Tess4JOcrAdapter implements OcrAdapter {
         this.tessdataPath = tessdataPath;
         this.fallbackEmitterCnpj = fallbackEmitterCnpj;
         this.fallbackRecipientTaxId = fallbackRecipientTaxId;
+        this.tesseractHolder = ThreadLocal.withInitial(this::createEngine);
     }
 
     @Async
@@ -136,15 +138,15 @@ public class Tess4JOcrAdapter implements OcrAdapter {
     }
 
     private String doOcr(List<BufferedImage> images) throws TesseractException {
-        Tesseract tesseract = configureEngine();
         StringBuilder builder = new StringBuilder();
+        Tesseract tesseract = tesseractHolder.get();
         for (BufferedImage image : images) {
             builder.append(tesseract.doOCR(image)).append('\n');
         }
         return builder.toString();
     }
 
-    private Tesseract configureEngine() {
+    private Tesseract createEngine() {
         Tesseract tesseract = new Tesseract();
         resolveTessdataPath().ifPresent(tesseract::setDatapath);
         tesseract.setLanguage(language);
@@ -170,7 +172,15 @@ public class Tess4JOcrAdapter implements OcrAdapter {
                 .map(path -> path.toAbsolutePath().normalize())
                 .anyMatch(normalized::startsWith);
         if (!allowed) {
-            throw new IllegalArgumentException("Tessdata path fora dos diretórios permitidos: " + normalized);
+            String allowedDirs = ALLOWED_TESSDATA_DIRECTORIES.stream()
+                    .map(Path::toString)
+                    .reduce((left, right) -> left + ", " + right)
+                    .orElse("sem diretórios padrão");
+            throw new IllegalArgumentException(
+                    "Tessdata path fora dos diretórios permitidos: "
+                            + normalized
+                            + ". Configure 'ocr.tessdata-path' ou 'TESSDATA_PREFIX' para um destes diretórios: "
+                            + allowedDirs);
         }
         return Optional.of(normalized.toString());
     }
@@ -263,7 +273,9 @@ public class Tess4JOcrAdapter implements OcrAdapter {
         try {
             return new BigDecimal(normalized);
         } catch (NumberFormatException ex) {
-            LOGGER.debug("Unable to parse decimal value '{}'", value, ex);
+            if (LOGGER.isDebugEnabled()) {
+                LOGGER.debug("Unable to parse decimal value '{}'", value, ex);
+            }
             return BigDecimal.ZERO;
         }
     }
