@@ -1,7 +1,8 @@
 package br.com.nfe.processor.core.domain.service;
 
 import br.com.nfe.processor.adapter.out.ocr.OcrAdapter;
-import br.com.nfe.processor.adapter.out.sefaz.SefazVerificationClient;
+import br.com.nfe.processor.adapter.out.sefaz.SefazClient;
+import br.com.nfe.processor.adapter.out.sefaz.SefazStatus;
 import br.com.nfe.processor.core.domain.model.Batch;
 import br.com.nfe.processor.core.domain.model.BatchStatus;
 import br.com.nfe.processor.core.domain.model.Issue;
@@ -18,6 +19,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import org.slf4j.Logger;
@@ -37,7 +39,7 @@ class BatchProcessingListener {
     private final FiscalValidationService fiscalValidationService;
     private final AnomalyService anomalyService;
     private final OcrAdapter ocrAdapter;
-    private final SefazVerificationClient sefazVerificationClient;
+    private final SefazClient sefazClient;
 
     BatchProcessingListener(
             BatchRepository batchRepository,
@@ -45,13 +47,13 @@ class BatchProcessingListener {
             FiscalValidationService fiscalValidationService,
             AnomalyService anomalyService,
             OcrAdapter ocrAdapter,
-            SefazVerificationClient sefazVerificationClient) {
+            SefazClient sefazClient) {
         this.batchRepository = batchRepository;
         this.xmlParserService = xmlParserService;
         this.fiscalValidationService = fiscalValidationService;
         this.anomalyService = anomalyService;
         this.ocrAdapter = ocrAdapter;
-        this.sefazVerificationClient = sefazVerificationClient;
+        this.sefazClient = sefazClient;
     }
 
     @Async
@@ -71,20 +73,30 @@ class BatchProcessingListener {
                     payloadFutures.add(resolveOcrSource(source));
                 } else {
                     payloadFutures.add(CompletableFuture.completedFuture(
-                            new InvoicePayload(source.xmlContent(), false)));
+                            InvoicePayload.success(source.xmlContent(), false, source.name())));
                 }
             }
 
             CompletableFuture<Void> all = CompletableFuture.allOf(payloadFutures.toArray(new CompletableFuture[0]));
             all.join();
 
-            List<InvoicePayload> payloads = payloadFutures.stream().map(this::joinPayload).toList();
-            if (payloads.isEmpty()) {
+            List<InvoicePayload> payloads = payloadFutures.stream().map(CompletableFuture::join).toList();
+            payloads.stream()
+                    .filter(InvoicePayload::isFailure)
+                    .forEach(payload -> {
+                        Issue issue = buildOcrFailureIssue(batch, payload.sourceName(), payload.failureReason());
+                        batch.getIssues().add(issue);
+                    });
+
+            List<InvoicePayload> successfulPayloads = payloads.stream()
+                    .filter(payload -> payload.xmlContent().isPresent())
+                    .toList();
+            if (successfulPayloads.isEmpty()) {
                 throw new UnprocessableEntityException("Nenhum XML de NFe encontrado no lote");
             }
 
-            payloads.forEach(payload -> {
-                ParsedInvoice parsed = xmlParserService.parse(payload.xmlContent());
+            successfulPayloads.forEach(payload -> {
+                ParsedInvoice parsed = xmlParserService.parse(payload.xmlContent().orElseThrow());
                 buildInvoice(batch, parsed, payload.ocrProcessed());
             });
 
@@ -93,7 +105,7 @@ class BatchProcessingListener {
                     "Lote {} processado com {} notas ({} via OCR)",
                     batch.getId(),
                     batch.getInvoices().size(),
-                    payloads.stream().filter(InvoicePayload::ocrProcessed).count());
+                    successfulPayloads.stream().filter(InvoicePayload::ocrProcessed).count());
         } catch (RuntimeException ex) {
             batch.setStatus(BatchStatus.FAILED);
             batchRepository.save(batch);
@@ -102,22 +114,21 @@ class BatchProcessingListener {
     }
 
     private CompletableFuture<InvoicePayload> resolveOcrSource(BatchProcessingRequestedEvent.InvoiceSource source) {
-        return ocrAdapter.extractXml(source.binaryContent()).thenApply(optional -> optional
-                .map(xml -> new InvoicePayload(xml, true))
-                .orElseThrow(() -> new UnprocessableEntityException(
-                        "OCR não conseguiu extrair XML do arquivo " + source.name())));
-    }
-
-    private InvoicePayload joinPayload(CompletableFuture<InvoicePayload> future) {
-        try {
-            return future.join();
-        } catch (CompletionException ex) {
-            Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
-            if (cause instanceof RuntimeException runtime) {
-                throw runtime;
+        return ocrAdapter.extractXml(source.binaryContent()).handle((optional, throwable) -> {
+            if (throwable != null) {
+                Throwable cause = throwable instanceof CompletionException ? throwable.getCause() : throwable;
+                String message = cause != null && cause.getMessage() != null
+                        ? cause.getMessage()
+                        : cause != null ? cause.getClass().getSimpleName() : "Erro desconhecido";
+                LOGGER.error("Falha ao executar OCR para {}", source.name(), cause);
+                return InvoicePayload.failure(source.name(), "Erro técnico no OCR: " + message);
             }
-            throw new UnprocessableEntityException("Falha ao processar OCR", cause);
-        }
+            if (optional.isEmpty()) {
+                return InvoicePayload.failure(
+                        source.name(), "Campos obrigatórios da NFe não foram identificados pelo OCR");
+            }
+            return InvoicePayload.success(optional.get(), true, source.name());
+        });
     }
 
     private void buildInvoice(Batch batch, ParsedInvoice parsed, boolean ocrProcessed) {
@@ -144,8 +155,8 @@ class BatchProcessingListener {
             invoice.getValidations().add(report);
         });
 
-        boolean sefazValid = sefazVerificationClient.isValidAccessKey(invoice.getAccessKey());
-        anomalyService.detect(batch, invoice, validations, sefazValid)
+        SefazStatus sefazStatus = sefazClient.checkStatus(invoice.getAccessKey());
+        anomalyService.detect(batch, invoice, validations, sefazStatus)
                 .forEach(issue -> {
                     batch.getIssues().add(issue);
                     invoice.getIssues().add(issue);
@@ -167,6 +178,15 @@ class BatchProcessingListener {
         issue.setType(IssueType.OCR_REQUIRED);
         issue.setSeverity(IssueSeverity.MEDIUM);
         issue.setDetail("Dados extraídos via OCR, verificação manual recomendada");
+        return issue;
+    }
+
+    private Issue buildOcrFailureIssue(Batch batch, String sourceName, String message) {
+        Issue issue = new Issue();
+        issue.setBatch(batch);
+        issue.setType(IssueType.OCR_EXTRACTION_FAILED);
+        issue.setSeverity(IssueSeverity.HIGH);
+        issue.setDetail("Falha ao extrair XML do arquivo " + sourceName + ": " + message);
         return issue;
     }
 
@@ -193,5 +213,17 @@ class BatchProcessingListener {
         batchRepository.save(batch);
     }
 
-    private record InvoicePayload(String xmlContent, boolean ocrProcessed) {}
+    private record InvoicePayload(Optional<String> xmlContent, boolean ocrProcessed, String sourceName, String failureReason) {
+        static InvoicePayload success(String xmlContent, boolean ocrProcessed, String sourceName) {
+            return new InvoicePayload(Optional.of(xmlContent), ocrProcessed, sourceName, null);
+        }
+
+        static InvoicePayload failure(String sourceName, String failureReason) {
+            return new InvoicePayload(Optional.empty(), true, sourceName, failureReason);
+        }
+
+        boolean isFailure() {
+            return xmlContent.isEmpty();
+        }
+    }
 }

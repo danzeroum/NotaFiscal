@@ -40,10 +40,19 @@ management:
 ocr:
   enabled: false
   tessdata-path: /usr/share/tessdata
-  fallback:
-    emitter-cnpj: 27865757000102
-    recipient-tax-id: 12345678909
+  confidence-threshold: 75
 
 sefaz:
   stub:
     enabled: true
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      sefazClient:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 5
+        minimum-number-of-calls: 2
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 2

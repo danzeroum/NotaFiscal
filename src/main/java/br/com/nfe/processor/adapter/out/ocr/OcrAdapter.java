@@ -5,4 +5,8 @@ import java.util.concurrent.CompletableFuture;
 
 public interface OcrAdapter {
     CompletableFuture<Optional<String>> extractXml(byte[] pdfContent);
+
+    default boolean isAvailable() {
+        return true;
+    }
 }

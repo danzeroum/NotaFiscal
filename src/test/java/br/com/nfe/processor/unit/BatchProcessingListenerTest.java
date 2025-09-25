@@ -2,14 +2,16 @@ package br.com.nfe.processor.unit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.when;
 
 import br.com.nfe.processor.adapter.out.ocr.OcrAdapter;
-import br.com.nfe.processor.adapter.out.sefaz.SefazVerificationClient;
+import br.com.nfe.processor.adapter.out.sefaz.SefazClient;
+import br.com.nfe.processor.adapter.out.sefaz.SefazStatus;
 import br.com.nfe.processor.core.domain.model.Batch;
 import br.com.nfe.processor.core.domain.model.BatchStatus;
 import br.com.nfe.processor.core.domain.model.Issue;
+import br.com.nfe.processor.core.domain.model.IssueSeverity;
+import br.com.nfe.processor.core.domain.model.IssueType;
 import br.com.nfe.processor.core.domain.model.Invoice;
 import br.com.nfe.processor.core.domain.model.ValidationResultType;
 import br.com.nfe.processor.core.domain.repository.BatchRepository;
@@ -48,7 +50,7 @@ class BatchProcessingListenerTest {
     @Mock
     private OcrAdapter ocrAdapter;
     @Mock
-    private SefazVerificationClient sefazVerificationClient;
+    private SefazClient sefazClient;
 
     private BatchProcessingListener listener;
     private Batch batch;
@@ -61,7 +63,7 @@ class BatchProcessingListenerTest {
                 fiscalValidationService,
                 anomalyService,
                 ocrAdapter,
-                sefazVerificationClient);
+                sefazClient);
 
         batch = new Batch();
         batch.setId("b_test");
@@ -73,8 +75,8 @@ class BatchProcessingListenerTest {
         when(xmlParserService.parse(any())).thenReturn(parsedInvoice());
         when(fiscalValidationService.validate(any()))
                 .thenReturn(List.of(new ValidationResult("TOTALS", ValidationResultType.OK, "ok")));
-        when(anomalyService.detect(any(), any(), any(), anyBoolean())).thenReturn(List.of());
-        when(sefazVerificationClient.isValidAccessKey(any())).thenReturn(true);
+        when(anomalyService.detect(any(), any(), any(), any())).thenReturn(List.of());
+        when(sefazClient.checkStatus(any())).thenReturn(SefazStatus.AUTORIZADA);
     }
 
     @Test
@@ -96,6 +98,25 @@ class BatchProcessingListenerTest {
         assertThat(batch.getIssues())
                 .extracting(Issue::getDetail)
                 .contains("Dados extraídos via OCR, verificação manual recomendada");
+    }
+
+    @Test
+    void shouldCreateIssueAndContinueWhenOcrFails() throws Exception {
+        when(ocrAdapter.extractXml(any())).thenReturn(CompletableFuture.completedFuture(Optional.empty()));
+
+        BatchProcessingRequestedEvent event = new BatchProcessingRequestedEvent(
+                batch.getId(),
+                List.of(
+                        BatchProcessingRequestedEvent.InvoiceSource.xml("nota.xml", sampleXml()),
+                        BatchProcessingRequestedEvent.InvoiceSource.ocr("imagem.pdf", "pdf".getBytes())));
+
+        listener.handleBatchProcessingRequested(event);
+
+        assertThat(batch.getStatus()).isEqualTo(BatchStatus.DONE);
+        assertThat(batch.getInvoices()).hasSize(1);
+        assertThat(batch.getIssues())
+                .anyMatch(issue -> issue.getType() == IssueType.OCR_EXTRACTION_FAILED
+                        && issue.getSeverity() == IssueSeverity.HIGH);
     }
 
     private ParsedInvoice parsedInvoice() {
