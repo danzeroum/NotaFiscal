@@ -13,6 +13,8 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import org.slf4j.Logger;
@@ -111,4 +113,6 @@ public class ZipIngestionService {
         }
         return buffer.toByteArray();
     }
+
+    private record InvoicePayload(String xmlContent, boolean ocrProcessed) {}
 }
