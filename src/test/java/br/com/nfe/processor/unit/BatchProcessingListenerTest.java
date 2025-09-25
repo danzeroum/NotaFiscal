@@ -2,11 +2,11 @@ package br.com.nfe.processor.unit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.when;
 
 import br.com.nfe.processor.adapter.out.ocr.OcrAdapter;
-import br.com.nfe.processor.adapter.out.sefaz.SefazVerificationClient;
+import br.com.nfe.processor.adapter.out.sefaz.SefazClient;
+import br.com.nfe.processor.adapter.out.sefaz.SefazStatus;
 import br.com.nfe.processor.core.domain.model.Batch;
 import br.com.nfe.processor.core.domain.model.BatchStatus;
 import br.com.nfe.processor.core.domain.model.Issue;
@@ -48,7 +48,7 @@ class BatchProcessingListenerTest {
     @Mock
     private OcrAdapter ocrAdapter;
     @Mock
-    private SefazVerificationClient sefazVerificationClient;
+    private SefazClient sefazClient;
 
     private BatchProcessingListener listener;
     private Batch batch;
@@ -61,7 +61,7 @@ class BatchProcessingListenerTest {
                 fiscalValidationService,
                 anomalyService,
                 ocrAdapter,
-                sefazVerificationClient);
+                sefazClient);
 
         batch = new Batch();
         batch.setId("b_test");
@@ -73,8 +73,8 @@ class BatchProcessingListenerTest {
         when(xmlParserService.parse(any())).thenReturn(parsedInvoice());
         when(fiscalValidationService.validate(any()))
                 .thenReturn(List.of(new ValidationResult("TOTALS", ValidationResultType.OK, "ok")));
-        when(anomalyService.detect(any(), any(), any(), anyBoolean())).thenReturn(List.of());
-        when(sefazVerificationClient.isValidAccessKey(any())).thenReturn(true);
+        when(anomalyService.detect(any(), any(), any(), any())).thenReturn(List.of());
+        when(sefazClient.checkStatus(any())).thenReturn(SefazStatus.AUTORIZADA);
     }
 
     @Test

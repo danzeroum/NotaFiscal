@@ -101,6 +101,20 @@ public class Tess4JOcrAdapter implements OcrAdapter {
         }
     }
 
+    @Override
+    public boolean isAvailable() {
+        if (!ocrEnabled) {
+            return false;
+        }
+        try {
+            tesseractHolder.get();
+            return true;
+        } catch (RuntimeException ex) {
+            LOGGER.error("OCR engine not available", ex);
+            return false;
+        }
+    }
+
     private String extractText(byte[] content) throws IOException, TesseractException {
         if (isPdf(content)) {
             return extractTextFromPdf(content);

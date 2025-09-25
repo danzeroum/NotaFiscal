@@ -1,7 +1,8 @@
 package br.com.nfe.processor.core.domain.service;
 
 import br.com.nfe.processor.adapter.out.ocr.OcrAdapter;
-import br.com.nfe.processor.adapter.out.sefaz.SefazVerificationClient;
+import br.com.nfe.processor.adapter.out.sefaz.SefazClient;
+import br.com.nfe.processor.adapter.out.sefaz.SefazStatus;
 import br.com.nfe.processor.core.domain.model.Batch;
 import br.com.nfe.processor.core.domain.model.BatchStatus;
 import br.com.nfe.processor.core.domain.model.Issue;
@@ -37,7 +38,7 @@ class BatchProcessingListener {
     private final FiscalValidationService fiscalValidationService;
     private final AnomalyService anomalyService;
     private final OcrAdapter ocrAdapter;
-    private final SefazVerificationClient sefazVerificationClient;
+    private final SefazClient sefazClient;
 
     BatchProcessingListener(
             BatchRepository batchRepository,
@@ -45,13 +46,13 @@ class BatchProcessingListener {
             FiscalValidationService fiscalValidationService,
             AnomalyService anomalyService,
             OcrAdapter ocrAdapter,
-            SefazVerificationClient sefazVerificationClient) {
+            SefazClient sefazClient) {
         this.batchRepository = batchRepository;
         this.xmlParserService = xmlParserService;
         this.fiscalValidationService = fiscalValidationService;
         this.anomalyService = anomalyService;
         this.ocrAdapter = ocrAdapter;
-        this.sefazVerificationClient = sefazVerificationClient;
+        this.sefazClient = sefazClient;
     }
 
     @Async
@@ -144,8 +145,8 @@ class BatchProcessingListener {
             invoice.getValidations().add(report);
         });
 
-        boolean sefazValid = sefazVerificationClient.isValidAccessKey(invoice.getAccessKey());
-        anomalyService.detect(batch, invoice, validations, sefazValid)
+        SefazStatus sefazStatus = sefazClient.checkStatus(invoice.getAccessKey());
+        anomalyService.detect(batch, invoice, validations, sefazStatus)
                 .forEach(issue -> {
                     batch.getIssues().add(issue);
                     invoice.getIssues().add(issue);
