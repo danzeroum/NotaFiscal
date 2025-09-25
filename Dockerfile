@@ -21,6 +21,12 @@ FROM eclipse-temurin:21-jre-alpine
 
 WORKDIR /app
 
+# Instala o Tesseract e os arquivos de treinamento necessários
+RUN apk add --no-cache tesseract-ocr tesseract-ocr-data
+
+# Expõe o diretório padrão dos dados de treinamento para o tess4j
+ENV TESSDATA_PREFIX=/usr/share/tessdata
+
 # Copia o .jar gerado no estágio anterior para a imagem final
 COPY --from=builder /build/target/*.jar app.jar
 
