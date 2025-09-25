@@ -56,6 +56,12 @@ Após executar o script, os seguintes pacotes ficam disponíveis em `samples/`:
 - `ocr.enabled=false` (padrão) — ativa integração experimental via Tess4J
 - `sefaz.stub.enabled=true` — stub de validação de chave NFe para ambiente demo
 
+## 🧠 Configuração do Tesseract
+- O OCR real exige os arquivos `.traineddata` disponíveis no contêiner (copiados no build).
+- A aplicação valida o diretório informado em `ocr.tessdata-path` (ou na variável de ambiente `TESSDATA_PREFIX`).
+- Caminhos aceitos por padrão: `/usr/share/tessdata`, `/usr/share/tesseract-ocr`, `/opt/tessdata`.
+- Para apontar para um local customizado, ajuste a propriedade/variável para ficar dentro de um desses diretórios ou adicione um *bind mount* que respeite o caminho permitido.
+
 ## 🔎 Observabilidade
 - Healthcheck: `GET /actuator/health`
 - Todos os erros seguem RFC 7807 com `traceId` correlacionado via MDC (`X-Trace-Id`).

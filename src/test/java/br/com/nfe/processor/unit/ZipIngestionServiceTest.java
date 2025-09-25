@@ -1,36 +1,29 @@
 package br.com.nfe.processor.unit;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import br.com.nfe.processor.adapter.out.ocr.OcrAdapter;
-import br.com.nfe.processor.adapter.out.sefaz.SefazVerificationClient;
 import br.com.nfe.processor.core.domain.model.Batch;
-import br.com.nfe.processor.core.domain.model.ValidationResultType;
 import br.com.nfe.processor.core.domain.repository.BatchRepository;
-import br.com.nfe.processor.core.domain.service.AnomalyService;
-import br.com.nfe.processor.core.domain.service.FiscalValidationService;
-import br.com.nfe.processor.core.domain.service.XmlParserService;
 import br.com.nfe.processor.core.domain.service.ZipIngestionService;
-import br.com.nfe.processor.core.domain.service.dto.ParsedInvoice;
-import br.com.nfe.processor.core.domain.valueobject.Cnpj;
-import br.com.nfe.processor.core.domain.service.dto.ValidationResult;
+import br.com.nfe.processor.core.domain.service.event.BatchProcessingRequestedEvent;
 import br.com.nfe.processor.exception.UnprocessableEntityException;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.math.BigDecimal;
-import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.mock.web.MockMultipartFile;
 
 @ExtendWith(MockitoExtension.class)
@@ -39,42 +32,40 @@ class ZipIngestionServiceTest {
     @Mock
     private BatchRepository batchRepository;
     @Mock
-    private XmlParserService xmlParserService;
-    @Mock
-    private FiscalValidationService fiscalValidationService;
-    @Mock
-    private AnomalyService anomalyService;
-    @Mock
-    private OcrAdapter ocrAdapter;
-    @Mock
-    private SefazVerificationClient sefazVerificationClient;
+    private ApplicationEventPublisher eventPublisher;
 
     private ZipIngestionService service;
+    private ZipIngestionService serviceWithOcr;
 
     @BeforeEach
     void setUp() {
         when(batchRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-        when(sefazVerificationClient.isValidAccessKey(any())).thenReturn(true);
-        when(fiscalValidationService.validate(any()))
-                .thenReturn(List.of(new ValidationResult("TOTALS_RECONCILIATION", ValidationResultType.OK, "ok")));
-        when(anomalyService.detect(any(), any(), any(), anyBoolean())).thenReturn(Collections.emptyList());
-        when(xmlParserService.parse(any())).thenReturn(parsedInvoice());
         service = new ZipIngestionService(
                 batchRepository,
-                xmlParserService,
-                fiscalValidationService,
-                anomalyService,
-                ocrAdapter,
-                sefazVerificationClient,
+                eventPublisher,
                 false);
+        serviceWithOcr = new ZipIngestionService(
+                batchRepository,
+                eventPublisher,
+                true);
     }
 
     @Test
-    void shouldProcessZipWithXmlEntries() throws Exception {
+    void shouldPublishEventForXmlEntries() throws Exception {
         MockMultipartFile file = new MockMultipartFile("file", "lote.zip", "application/zip", zipWith("nota.xml", "<xml/>"));
         Batch batch = service.ingest(file, false);
-        assertThat(batch.getInvoicesTotal()).isEqualTo(1);
-        assertThat(batch.getStatus()).isNotNull();
+
+        ArgumentCaptor<BatchProcessingRequestedEvent> captor =
+                ArgumentCaptor.forClass(BatchProcessingRequestedEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+
+        BatchProcessingRequestedEvent event = captor.getValue();
+        List<BatchProcessingRequestedEvent.InvoiceSource> sources = event.sources();
+        List<Boolean> ocrFlags = sources.stream().map(BatchProcessingRequestedEvent.InvoiceSource::requiresOcr)
+                .collect(Collectors.toList());
+
+        org.assertj.core.api.Assertions.assertThat(event.batchId()).isEqualTo(batch.getId());
+        org.assertj.core.api.Assertions.assertThat(ocrFlags).containsExactly(false);
     }
 
     @Test
@@ -83,6 +74,7 @@ class ZipIngestionServiceTest {
         assertThatThrownBy(() -> service.ingest(file, false))
                 .isInstanceOf(UnprocessableEntityException.class)
                 .hasMessageContaining("OCR desabilitado");
+        verify(eventPublisher, never()).publishEvent(any());
     }
 
     @Test
@@ -91,6 +83,26 @@ class ZipIngestionServiceTest {
         assertThatThrownBy(() -> service.ingest(file, false))
                 .isInstanceOf(UnprocessableEntityException.class)
                 .hasMessageContaining("Extensão não suportada");
+        verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    void shouldPublishEventWithOcrEntryWhenEnabled() throws Exception {
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "lote.zip", "application/zip", zipWith("arquivo.pdf", "pdf"));
+
+        Batch batch = serviceWithOcr.ingest(file, true);
+
+        ArgumentCaptor<BatchProcessingRequestedEvent> captor =
+                ArgumentCaptor.forClass(BatchProcessingRequestedEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        BatchProcessingRequestedEvent event = captor.getValue();
+
+        org.assertj.core.api.Assertions.assertThat(event.batchId()).isEqualTo(batch.getId());
+        org.assertj.core.api.Assertions.assertThat(event.sources())
+                .singleElement()
+                .extracting(BatchProcessingRequestedEvent.InvoiceSource::requiresOcr)
+                .isEqualTo(true);
     }
 
     private byte[] zipWith(String name, String content) {
@@ -105,21 +117,5 @@ class ZipIngestionServiceTest {
         } catch (IOException ex) {
             throw new RuntimeException(ex);
         }
-    }
-
-    private ParsedInvoice parsedInvoice() {
-        return new ParsedInvoice(
-                "chave",
-                "Emitente",
-                new Cnpj("12345678000195"),
-                "Destinatario",
-                "456",
-                1,
-                BigDecimal.ONE,
-                BigDecimal.ONE,
-                BigDecimal.ZERO,
-                BigDecimal.ZERO,
-                BigDecimal.ZERO,
-                "5102");
     }
 }
