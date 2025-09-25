@@ -5,8 +5,10 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -16,6 +18,7 @@ import java.util.regex.Pattern;
 import javax.imageio.ImageIO;
 import net.sourceforge.tess4j.Tesseract;
 import net.sourceforge.tess4j.TesseractException;
+import org.apache.commons.text.StringEscapeUtils;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.rendering.ImageType;
@@ -31,7 +34,15 @@ public class Tess4JOcrAdapter implements OcrAdapter {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(Tess4JOcrAdapter.class);
 
-    private static final Pattern ACCESS_KEY_PATTERN = Pattern.compile("\\b\\d{44}\\b");
+    private static final int NFE_ACCESS_KEY_LENGTH = 44;
+    private static final int OCR_DPI = 300;
+    private static final List<Path> ALLOWED_TESSDATA_DIRECTORIES = Collections.unmodifiableList(List.of(
+            Path.of("/usr/share/tessdata"),
+            Path.of("/usr/share/tesseract-ocr"),
+            Path.of("/opt/tessdata")));
+
+    private static final Pattern ACCESS_KEY_PATTERN =
+            Pattern.compile("\\b\\d{" + NFE_ACCESS_KEY_LENGTH + "}\\b");
     private static final Pattern CNPJ_PATTERN = Pattern.compile(
             "(?:(?:\\d{2}\\.\\d{3}\\.\\d{3}/\\d{4}-\\d{2})|(?:\\b\\d{14}\\b))");
     private static final Pattern CPF_PATTERN = Pattern.compile(
@@ -48,14 +59,20 @@ public class Tess4JOcrAdapter implements OcrAdapter {
     private final boolean ocrEnabled;
     private final String language;
     private final String tessdataPath;
+    private final String fallbackEmitterCnpj;
+    private final String fallbackRecipientTaxId;
 
     public Tess4JOcrAdapter(
             @Value("${ocr.enabled:false}") boolean ocrEnabled,
             @Value("${ocr.language:por+eng}") String language,
-            @Value("${ocr.tessdata-path:/usr/share/tessdata}") String tessdataPath) {
+            @Value("${ocr.tessdata-path:/usr/share/tessdata}") String tessdataPath,
+            @Value("${ocr.fallback.emitter-cnpj:27865757000102}") String fallbackEmitterCnpj,
+            @Value("${ocr.fallback.recipient-tax-id:12345678909}") String fallbackRecipientTaxId) {
         this.ocrEnabled = ocrEnabled;
         this.language = language;
         this.tessdataPath = tessdataPath;
+        this.fallbackEmitterCnpj = fallbackEmitterCnpj;
+        this.fallbackRecipientTaxId = fallbackRecipientTaxId;
     }
 
     @Async
@@ -102,7 +119,7 @@ public class Tess4JOcrAdapter implements OcrAdapter {
             PDFRenderer renderer = new PDFRenderer(document);
             List<BufferedImage> pages = new ArrayList<>();
             for (int page = 0; page < document.getNumberOfPages(); page++) {
-                pages.add(renderer.renderImageWithDPI(page, 300, ImageType.RGB));
+                pages.add(renderer.renderImageWithDPI(page, OCR_DPI, ImageType.RGB));
             }
             return doOcr(pages);
         }
@@ -129,17 +146,33 @@ public class Tess4JOcrAdapter implements OcrAdapter {
 
     private Tesseract configureEngine() {
         Tesseract tesseract = new Tesseract();
-        if (tessdataPath != null && !tessdataPath.isBlank()) {
-            tesseract.setDatapath(tessdataPath);
-        } else {
-            String envPath = System.getenv("TESSDATA_PREFIX");
-            if (envPath != null && !envPath.isBlank()) {
-                tesseract.setDatapath(envPath);
-            }
-        }
+        resolveTessdataPath().ifPresent(tesseract::setDatapath);
         tesseract.setLanguage(language);
-        tesseract.setTessVariable("user_defined_dpi", "300");
+        tesseract.setTessVariable("user_defined_dpi", Integer.toString(OCR_DPI));
         return tesseract;
+    }
+
+    private Optional<String> resolveTessdataPath() {
+        Optional<String> configuredPath = validateTessdataPath(tessdataPath);
+        if (configuredPath.isPresent()) {
+            return configuredPath;
+        }
+        String envPath = System.getenv("TESSDATA_PREFIX");
+        return validateTessdataPath(envPath);
+    }
+
+    private Optional<String> validateTessdataPath(String candidate) {
+        if (candidate == null || candidate.isBlank()) {
+            return Optional.empty();
+        }
+        Path normalized = Paths.get(candidate).toAbsolutePath().normalize();
+        boolean allowed = ALLOWED_TESSDATA_DIRECTORIES.stream()
+                .map(path -> path.toAbsolutePath().normalize())
+                .anyMatch(normalized::startsWith);
+        if (!allowed) {
+            throw new IllegalArgumentException("Tessdata path fora dos diretórios permitidos: " + normalized);
+        }
+        return Optional.of(normalized.toString());
     }
 
     private Optional<String> buildXmlFromText(String rawText) {
@@ -152,9 +185,10 @@ public class Tess4JOcrAdapter implements OcrAdapter {
         String recipientName = extractLabeledValue(normalizedText, "DESTINATÁRIO", "Destinatário", "Dest:", "Dest");
 
         String emitterCnpj = extractDigits(CNPJ_PATTERN, normalizedText)
-                .orElse("27865757000102");
+                .orElse(fallbackEmitterCnpj);
         String recipientTaxId = extractDigits(CPF_PATTERN, normalizedText)
-                .orElseGet(() -> extractSecondCnpj(normalizedText, emitterCnpj));
+                .orElseGet(() -> extractSecondCnpj(normalizedText, emitterCnpj)
+                        .orElse(fallbackRecipientTaxId));
 
         BigDecimal totalAmount = findAmount(TOTAL_PATTERN, normalizedText).orElse(BigDecimal.ZERO);
         BigDecimal productsAmount = findAmount(PRODUCTS_PATTERN, normalizedText).orElse(totalAmount);
@@ -205,15 +239,15 @@ public class Tess4JOcrAdapter implements OcrAdapter {
         return Optional.empty();
     }
 
-    private String extractSecondCnpj(String text, String primaryCnpj) {
+    private Optional<String> extractSecondCnpj(String text, String primaryCnpj) {
         Matcher matcher = CNPJ_PATTERN.matcher(text);
         while (matcher.find()) {
             String current = matcher.group().replaceAll("\\D", "");
             if (!current.equals(primaryCnpj)) {
-                return current;
+                return Optional.of(current);
             }
         }
-        return "12345678909";
+        return Optional.empty();
     }
 
     private Optional<BigDecimal> findAmount(Pattern pattern, String text) {
@@ -344,13 +378,7 @@ public class Tess4JOcrAdapter implements OcrAdapter {
     }
 
     private String escapeXml(String value) {
-        String sanitized = value
-                .replace("&", "&amp;")
-                .replace("<", "&lt;")
-                .replace(">", "&gt;")
-                .replace("\"", "&quot;")
-                .replace("'", "&apos;");
-        return new String(sanitized.getBytes(StandardCharsets.UTF_8), StandardCharsets.UTF_8);
+        return StringEscapeUtils.escapeXml11(value);
     }
 
     private String defaultIfBlank(String value, String defaultValue) {
