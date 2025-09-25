@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import br.com.nfe.processor.adapter.out.ocr.OcrAdapter;
 import br.com.nfe.processor.adapter.out.sefaz.SefazVerificationClient;
 import br.com.nfe.processor.core.domain.model.Batch;
+import br.com.nfe.processor.core.domain.model.IssueSeverity;
 import br.com.nfe.processor.core.domain.model.ValidationResultType;
 import br.com.nfe.processor.core.domain.repository.BatchRepository;
 import br.com.nfe.processor.core.domain.service.AnomalyService;
@@ -24,6 +25,10 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import org.junit.jupiter.api.BeforeEach;
@@ -50,6 +55,7 @@ class ZipIngestionServiceTest {
     private SefazVerificationClient sefazVerificationClient;
 
     private ZipIngestionService service;
+    private ZipIngestionService serviceWithOcr;
 
     @BeforeEach
     void setUp() {
@@ -59,6 +65,7 @@ class ZipIngestionServiceTest {
                 .thenReturn(List.of(new ValidationResult("TOTALS_RECONCILIATION", ValidationResultType.OK, "ok")));
         when(anomalyService.detect(any(), any(), any(), anyBoolean())).thenReturn(Collections.emptyList());
         when(xmlParserService.parse(any())).thenReturn(parsedInvoice());
+        when(ocrAdapter.extractXml(any())).thenReturn(CompletableFuture.completedFuture(Optional.empty()));
         service = new ZipIngestionService(
                 batchRepository,
                 xmlParserService,
@@ -67,6 +74,14 @@ class ZipIngestionServiceTest {
                 ocrAdapter,
                 sefazVerificationClient,
                 false);
+        serviceWithOcr = new ZipIngestionService(
+                batchRepository,
+                xmlParserService,
+                fiscalValidationService,
+                anomalyService,
+                ocrAdapter,
+                sefazVerificationClient,
+                true);
     }
 
     @Test
@@ -93,6 +108,25 @@ class ZipIngestionServiceTest {
                 .hasMessageContaining("Extensão não suportada");
     }
 
+    @Test
+    void shouldProcessPdfWithOcrAndCreateIssue() throws Exception {
+        when(ocrAdapter.extractXml(any()))
+                .thenReturn(CompletableFuture.completedFuture(Optional.of(sampleXml())));
+
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "lote.zip", "application/zip", zipWith("arquivo.pdf", "pdf"));
+
+        Batch batch = serviceWithOcr.ingest(file, true);
+
+        assertThat(batch.getInvoices()).hasSize(1);
+        assertThat(batch.getInvoices().iterator().next().isOcrProcessed()).isTrue();
+        assertThat(batch.getIssues())
+                .anySatisfy(issue -> {
+                    assertThat(issue.getSeverity()).isEqualTo(IssueSeverity.MEDIUM);
+                    assertThat(issue.getDetail()).contains("Dados extraídos via OCR");
+                });
+    }
+
     private byte[] zipWith(String name, String content) {
         try {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -102,6 +136,14 @@ class ZipIngestionServiceTest {
                 zip.closeEntry();
             }
             return out.toByteArray();
+        } catch (IOException ex) {
+            throw new RuntimeException(ex);
+        }
+    }
+
+    private String sampleXml() {
+        try {
+            return Files.readString(Path.of("samples/xml/ok-01.xml"));
         } catch (IOException ex) {
             throw new RuntimeException(ex);
         }
