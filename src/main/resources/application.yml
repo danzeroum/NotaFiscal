@@ -40,9 +40,7 @@ management:
 ocr:
   enabled: false
   tessdata-path: /usr/share/tessdata
-  fallback:
-    emitter-cnpj: 27865757000102
-    recipient-tax-id: 12345678909
+  confidence-threshold: 75
 
 sefaz:
   stub:

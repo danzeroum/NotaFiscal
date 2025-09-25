@@ -52,6 +52,7 @@ class SefazAdapterIntegrationTest {
         registry.add("SEFAZ_CERT_PATH", () -> keyStorePath.toString());
         registry.add("SEFAZ_CERT_PASSWORD", () -> PASSWORD);
         registry.add("SEFAZ_ENV", () -> "homolog");
+        registry.add("sefaz.allowed-cert-dirs", () -> keyStorePath.getParent().toString());
     }
 
     @BeforeEach

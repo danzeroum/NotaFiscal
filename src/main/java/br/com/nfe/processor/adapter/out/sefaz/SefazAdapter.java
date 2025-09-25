@@ -1,6 +1,9 @@
 package br.com.nfe.processor.adapter.out.sefaz;
 
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -31,12 +34,29 @@ public class SefazAdapter implements SefazClient {
 
     private final WebServiceTemplate webServiceTemplate;
     private final String environment;
+    private final MeterRegistry meterRegistry;
+    private final Timer checkTimer;
+    private final Counter successCounter;
+    private final Counter failureCounter;
 
     public SefazAdapter(
             WebServiceTemplate webServiceTemplate,
-            @Value("${SEFAZ_ENV:homolog}") String environment) {
+            @Value("${SEFAZ_ENV:homolog}") String environment,
+            MeterRegistry meterRegistry) {
         this.webServiceTemplate = webServiceTemplate;
         this.environment = environment;
+        this.meterRegistry = meterRegistry;
+        this.checkTimer = Timer.builder("sefaz.check.duration")
+                .description("Tempo gasto para consultar status da SEFAZ")
+                .register(meterRegistry);
+        this.successCounter = Counter.builder("sefaz.check.total")
+                .description("Total de consultas à SEFAZ")
+                .tag("result", "success")
+                .register(meterRegistry);
+        this.failureCounter = Counter.builder("sefaz.check.total")
+                .description("Total de consultas à SEFAZ")
+                .tag("result", "failure")
+                .register(meterRegistry);
     }
 
     @Override
@@ -45,23 +65,31 @@ public class SefazAdapter implements SefazClient {
         if (!StringUtils.hasText(accessKey)) {
             return SefazStatus.INEXISTENTE;
         }
+        Timer.Sample sample = Timer.start(meterRegistry);
         try {
             DOMResult result = new DOMResult();
             webServiceTemplate.sendSourceAndReceiveToResult(
                     new StreamSource(new ByteArrayInputStream(buildRequest(accessKey).getBytes(StandardCharsets.UTF_8))),
                     result);
-            return parseStatus(result);
+            SefazStatus status = parseStatus(result);
+            successCounter.increment();
+            return status;
         } catch (WebServiceIOException ex) {
             LOGGER.error("Falha de comunicação com a SEFAZ", ex);
+            failureCounter.increment();
             throw ex;
         } catch (IOException | TransformerException ex) {
             LOGGER.error("Erro ao consultar status na SEFAZ", ex);
+            failureCounter.increment();
             throw new WebServiceIOException("Erro ao consultar SEFAZ", ex);
+        } finally {
+            sample.stop(checkTimer);
         }
     }
 
     @SuppressWarnings("unused")
     SefazStatus fallbackStatus(String accessKey, Throwable throwable) {
+        failureCounter.increment();
         LOGGER.warn("Retornando status INDISPONIVEL para chave {} devido a: {}", accessKey, throwable.getMessage());
         return SefazStatus.INDISPONIVEL;
     }
