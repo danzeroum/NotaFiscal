@@ -23,6 +23,8 @@ import br.com.nfe.processor.core.domain.service.dto.ParsedInvoice;
 import br.com.nfe.processor.core.domain.service.dto.ValidationResult;
 import br.com.nfe.processor.core.domain.service.event.BatchProcessingRequestedEvent;
 import br.com.nfe.processor.core.domain.valueobject.Cnpj;
+import br.com.nfe.processor.infrastructure.metrics.NfeMetricsService;
+import io.micrometer.core.instrument.Timer;
 import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -51,6 +53,8 @@ class BatchProcessingListenerTest {
     private OcrAdapter ocrAdapter;
     @Mock
     private SefazClient sefazClient;
+    @Mock
+    private NfeMetricsService metricsService;
 
     private BatchProcessingListener listener;
     private Batch batch;
@@ -63,7 +67,8 @@ class BatchProcessingListenerTest {
                 fiscalValidationService,
                 anomalyService,
                 ocrAdapter,
-                sefazClient);
+                sefazClient,
+                metricsService);
 
         batch = new Batch();
         batch.setId("b_test");
@@ -77,6 +82,7 @@ class BatchProcessingListenerTest {
                 .thenReturn(List.of(new ValidationResult("TOTALS", ValidationResultType.OK, "ok")));
         when(anomalyService.detect(any(), any(), any(), any())).thenReturn(List.of());
         when(sefazClient.checkStatus(any())).thenReturn(SefazStatus.AUTORIZADA);
+        when(metricsService.startTimer()).thenReturn(Timer.start());
     }
 
     @Test

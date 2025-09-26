@@ -13,7 +13,7 @@ class Tess4JOcrAdapterRegexTest {
 
     @Test
     void shouldHandleLargeInputWithoutRegexCatastrophicBacktracking() throws Exception {
-        Tess4JOcrAdapter adapter = new Tess4JOcrAdapter(true, "por+eng", "/usr/share/tessdata", "12345678901234", "12345678909");
+        Tess4JOcrAdapter adapter = new Tess4JOcrAdapter(true, "por+eng", "/usr/share/tessdata", 75);
         Method method = Tess4JOcrAdapter.class.getDeclaredMethod("findAccessKey", String.class);
         method.setAccessible(true);
         String repeating = "1".repeat(43) + "2";

@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import br.com.nfe.processor.config.TraceIdFilter;
+import br.com.nfe.processor.infrastructure.config.TraceIdFilter;
 import br.com.nfe.processor.exception.GlobalExceptionHandler;
 import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI; // Adicionado para clareza
@@ -23,9 +23,15 @@ class GlobalExceptionHandlerTest {
 
         MDC.put(TraceIdFilter.TRACE_ID_KEY, "trace-test");
         try {
-            ProblemDetail problem = handler.handleUnexpected(new RuntimeException("boom"), request);
+            var response = handler.handleGenericException(new RuntimeException("boom"), request);
 
-            // AQUI ESTÁ A CORREÇÃO NO TESTE
+            assertThat(response.getStatusCode().value()).isEqualTo(500);
+            assertThat(response.getHeaders().getContentType()).isNotNull();
+            assertThat(response.getHeaders().getContentType().toString())
+                    .isEqualTo("application/problem+json");
+
+            ProblemDetail problem = response.getBody();
+            assertThat(problem).isNotNull();
             assertThat(problem.getInstance()).isEqualTo(URI.create("/batches"));
             assertThat(problem.getType().toString()).contains("internal-error");
             assertThat(problem.getTitle()).isEqualTo("Erro interno");

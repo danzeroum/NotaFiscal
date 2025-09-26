@@ -36,7 +36,7 @@ class BatchControllerIntegrationTest {
         mockMvc.perform(multipart("/batches").file(file))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").isNotEmpty())
-                .andExpect(jsonPath("$.status").value("DONE"));
+                .andExpect(jsonPath("$.status").value("RECEIVED"));
     }
 
     @Test
@@ -55,7 +55,8 @@ class BatchControllerIntegrationTest {
         mockMvc.perform(get("/batches/" + batchId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(batchId))
-                .andExpect(jsonPath("$.stats.invoicesTotal").value(2));
+                .andExpect(jsonPath("$.status").value("RECEIVED"))
+                .andExpect(jsonPath("$.stats.invoicesTotal").value(0));
     }
 
     @Test

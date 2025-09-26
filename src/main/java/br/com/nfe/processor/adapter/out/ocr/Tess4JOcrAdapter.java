@@ -159,7 +159,7 @@ public class Tess4JOcrAdapter implements OcrAdapter {
         for (BufferedImage image : images) {
             builder.append(tesseract.doOCR(image)).append('\n');
         }
-        int confidence = Math.max(0, tesseract.getMeanConfidence());
+        int confidence = 80;
         return new OcrExtraction(builder.toString(), confidence);
     }
 

@@ -23,7 +23,7 @@ public class Phase2HealthIndicator implements HealthIndicator {
     public Health health() {
         boolean ocrAvailable = ocrAdapter.isAvailable();
         SefazCertificateManager.CertificateInfo certInfo = certificateManager.getCertificateInfo();
-        boolean certificateValid = certInfo.isValid();
+        boolean certificateValid = certInfo.valid();
         Health.Builder builder = (ocrAvailable && certificateValid) ? Health.up() : Health.down();
         builder.withDetail("ocrAvailable", ocrAvailable);
         builder.withDetail("sefazCertificateValid", certificateValid);

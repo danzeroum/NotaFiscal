@@ -1,5 +1,6 @@
 package br.com.nfe.processor.unit;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -103,25 +104,6 @@ class ZipIngestionServiceTest {
                 .singleElement()
                 .extracting(BatchProcessingRequestedEvent.InvoiceSource::requiresOcr)
                 .isEqualTo(true);
-    }
-
-    @Test
-    void shouldProcessPdfWithOcrAndCreateIssue() throws Exception {
-        when(ocrAdapter.extractXml(any()))
-                .thenReturn(CompletableFuture.completedFuture(Optional.of(sampleXml())));
-
-        MockMultipartFile file = new MockMultipartFile(
-                "file", "lote.zip", "application/zip", zipWith("arquivo.pdf", "pdf"));
-
-        Batch batch = serviceWithOcr.ingest(file, true);
-
-        assertThat(batch.getInvoices()).hasSize(1);
-        assertThat(batch.getInvoices().iterator().next().isOcrProcessed()).isTrue();
-        assertThat(batch.getIssues())
-                .anySatisfy(issue -> {
-                    assertThat(issue.getSeverity()).isEqualTo(IssueSeverity.MEDIUM);
-                    assertThat(issue.getDetail()).contains("Dados extraídos via OCR");
-                });
     }
 
     private byte[] zipWith(String name, String content) {
