@@ -1,0 +1,46 @@
+{
+  "version": "6.0",
+  "timestamp": "2025-01-20T10:00:00Z",
+  "project": {
+    "name": "nfe-processor",
+    "domain": "fintech",
+    "buyer": "startup",
+    "timeline": "3 semanas MVP",
+    "budget_range": "low"
+  },
+  "problem": {
+    "statement": "Processar e validar XMLs de NFe com geração de relatórios Excel",
+    "current_pain": "Processamento manual lento e propenso a erros",
+    "desired_outcome": "Automação completa com validação fiscal"
+  },
+  "must_have": [
+    "Upload de ZIP com múltiplos XMLs/PDFs",
+    "Extração de campos essenciais",
+    "Validação fiscal básica (ICMS/IPI/ISS)",
+    "Detecção de inconsistências simples",
+    "Export Excel padrão ERP",
+    "Healthcheck e logs estruturados"
+  ],
+  "nice_to_have": [
+    "Integração SEFAZ stub",
+    "Classificação plano de contas",
+    "Dashboard com métricas",
+    "API rate limit"
+  ],
+  "explicitly_excluded": [
+    "Emissão de NFe",
+    "Integração SEFAZ real",
+    "Multi-tenant",
+    "OpenTelemetry completo"
+  ],
+  "constraints": [
+    "Java 21 + Spring Boot 3",
+    "H2/PostgreSQL",
+    "Deploy em container",
+    "P95 < 800ms"
+  ],
+  "success_metrics": {
+    "technical": ["P95 < 800ms", "Zero erros em validação", "Cobertura > 60%"],
+    "business": ["Processar 1000 NFes/hora", "95% precisão", "Setup < 5min"]
+  }
+}
