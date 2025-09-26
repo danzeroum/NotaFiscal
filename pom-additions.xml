@@ -1,0 +1,15 @@
+<!-- BuildToFlip v6 Dependencies -->
+<dependency>
+    <groupId>io.micrometer</groupId>
+    <artifactId>micrometer-registry-prometheus</artifactId>
+</dependency>
+<dependency>
+    <groupId>net.logstash.logback</groupId>
+    <artifactId>logstash-logback-encoder</artifactId>
+    <version>7.4</version>
+</dependency>
+<dependency>
+    <groupId>org.zalando</groupId>
+    <artifactId>problem-spring-web-starter</artifactId>
+    <version>0.29.1</version>
+</dependency>
