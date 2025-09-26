@@ -31,12 +31,6 @@ server:
   error:
     include-message: never
 
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health
-
 ocr:
   enabled: false
   tessdata-path: /usr/share/tessdata

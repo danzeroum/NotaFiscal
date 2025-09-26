@@ -2,7 +2,6 @@ package br.com.nfe.processor.unit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 import br.com.nfe.processor.adapter.in.web.BatchController;
@@ -58,7 +57,6 @@ class MustHaveNegativeTests {
 
     @BeforeEach
     void setUp() {
-        when(batchRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         zipIngestionService = new ZipIngestionService(batchRepository, eventPublisher, false);
         xmlParserService = new XmlParserService();
         fiscalValidationService = new FiscalValidationService();

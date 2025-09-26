@@ -10,11 +10,14 @@ import br.com.nfe.processor.core.domain.model.IssueSeverity;
 import br.com.nfe.processor.core.domain.model.IssueType;
 import br.com.nfe.processor.core.domain.model.Invoice;
 import br.com.nfe.processor.core.domain.model.ValidationReport;
+import br.com.nfe.processor.core.domain.model.ValidationResultType;
 import br.com.nfe.processor.core.domain.repository.BatchRepository;
 import br.com.nfe.processor.core.domain.service.dto.ParsedInvoice;
 import br.com.nfe.processor.core.domain.service.dto.ValidationResult;
 import br.com.nfe.processor.core.domain.service.event.BatchProcessingRequestedEvent;
 import br.com.nfe.processor.exception.UnprocessableEntityException;
+import br.com.nfe.processor.infrastructure.metrics.NfeMetricsService;
+import io.micrometer.core.instrument.Timer;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -30,7 +33,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 @Component
-class BatchProcessingListener {
+public class BatchProcessingListener {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(BatchProcessingListener.class);
 
@@ -40,20 +43,23 @@ class BatchProcessingListener {
     private final AnomalyService anomalyService;
     private final OcrAdapter ocrAdapter;
     private final SefazClient sefazClient;
+    private final NfeMetricsService metricsService;
 
-    BatchProcessingListener(
+    public BatchProcessingListener(
             BatchRepository batchRepository,
             XmlParserService xmlParserService,
             FiscalValidationService fiscalValidationService,
             AnomalyService anomalyService,
             OcrAdapter ocrAdapter,
-            SefazClient sefazClient) {
+            SefazClient sefazClient,
+            NfeMetricsService metricsService) {
         this.batchRepository = batchRepository;
         this.xmlParserService = xmlParserService;
         this.fiscalValidationService = fiscalValidationService;
         this.anomalyService = anomalyService;
         this.ocrAdapter = ocrAdapter;
         this.sefazClient = sefazClient;
+        this.metricsService = metricsService;
     }
 
     @Async
@@ -63,6 +69,7 @@ class BatchProcessingListener {
         Batch batch = batchRepository.findById(event.batchId())
                 .orElseThrow(() -> new IllegalStateException("Batch não encontrado: " + event.batchId()));
         long start = System.currentTimeMillis();
+        Timer.Sample sample = metricsService.startTimer();
         try {
             batch.setStatus(BatchStatus.PROCESSING);
             batchRepository.save(batch);
@@ -101,6 +108,7 @@ class BatchProcessingListener {
             });
 
             finalizeBatch(batch, start);
+            metricsService.recordSuccess(sample);
             LOGGER.info(
                     "Lote {} processado com {} notas ({} via OCR)",
                     batch.getId(),
@@ -109,6 +117,7 @@ class BatchProcessingListener {
         } catch (RuntimeException ex) {
             batch.setStatus(BatchStatus.FAILED);
             batchRepository.save(batch);
+            metricsService.recordError(sample);
             LOGGER.error("Falha ao processar lote {}", batch.getId(), ex);
         }
     }
@@ -153,6 +162,9 @@ class BatchProcessingListener {
             ValidationReport report = toValidationReport(batch, invoice, result);
             batch.getValidations().add(report);
             invoice.getValidations().add(report);
+            if (result.getResult() == ValidationResultType.ERROR) {
+                metricsService.recordValidationFailure();
+            }
         });
 
         SefazStatus sefazStatus = sefazClient.checkStatus(invoice.getAccessKey());
