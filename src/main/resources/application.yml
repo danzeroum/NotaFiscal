@@ -56,3 +56,42 @@ resilience4j:
         failure-rate-threshold: 50
         wait-duration-in-open-state: 10s
         permitted-number-of-calls-in-half-open-state: 2
+
+# BuildToFlip v6 Configuration
+logging:
+  pattern:
+    console: '{"timestamp":"%d{ISO8601}","level":"%level","service":"nfe-processor","traceId":"%X{traceId}","spanId":"%X{spanId}","class":"%logger{36}","message":"%msg"}%n'
+  level:
+    root: INFO
+    br.com.nfe: DEBUG
+    org.springframework.web.filter: DEBUG
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when-authorized
+      probes:
+        enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    tags:
+      application: nfe-processor
+      environment: ${ENVIRONMENT:dev}
+
+# Feature Flags v6
+features:
+  mock-data-enabled: ${FEATURE_MOCK_DATA:true}
+  rate-limit-enabled: ${FEATURE_RATE_LIMIT:true}
+  cache-enabled: ${FEATURE_CACHE:true}
+  ocr:
+    enabled: ${OCR_ENABLED:false}
+  sefaz:
+    stub:
+      enabled: ${SEFAZ_STUB_ENABLED:true}
