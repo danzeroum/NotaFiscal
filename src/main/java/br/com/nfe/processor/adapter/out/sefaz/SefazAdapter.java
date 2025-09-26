@@ -14,6 +14,7 @@ import javax.xml.transform.Result;
 import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMResult;
+import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 import javax.xml.transform.stream.StreamSource;
 import org.slf4j.Logger;
@@ -78,10 +79,10 @@ public class SefazAdapter implements SefazClient {
             LOGGER.error("Falha de comunicação com a SEFAZ", ex);
             failureCounter.increment();
             throw ex;
-        } catch (IOException | TransformerException ex) {
+        } catch (TransformerException ex) {
             LOGGER.error("Erro ao consultar status na SEFAZ", ex);
             failureCounter.increment();
-            throw new WebServiceIOException("Erro ao consultar SEFAZ", ex);
+            throw new WebServiceIOException("Erro ao consultar SEFAZ", new IOException(ex));
         } finally {
             sample.stop(checkTimer);
         }
@@ -109,7 +110,8 @@ public class SefazAdapter implements SefazClient {
 
     private SefazStatus parseStatus(Result result) throws TransformerException {
         ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-        TransformerFactory.newInstance().newTransformer().transform(result, new StreamResult(buffer));
+        DOMSource source = new DOMSource(((DOMResult) result).getNode());
+        TransformerFactory.newInstance().newTransformer().transform(source, new StreamResult(buffer));
         String payload = buffer.toString(StandardCharsets.UTF_8);
         String code = extractValue(payload, "cStat");
         if (code == null) {

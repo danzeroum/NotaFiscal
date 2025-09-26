@@ -18,10 +18,6 @@ import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.stream.Stream;
-import org.apache.hc.client5.http.classic.HttpClient;
-import org.apache.hc.client5.http.impl.classic.HttpClients;
-import org.apache.hc.core5.http.io.SocketConfig;
-import org.apache.hc.core5.util.Timeout;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -56,15 +52,16 @@ public class SefazCertificateManager {
 
     public HttpComponentsMessageSender createMessageSender()
             throws KeyStoreException, IOException, NoSuchAlgorithmException, CertificateException, UnrecoverableKeyException {
+        Path normalized = Paths.get(certificatePath()).toAbsolutePath().normalize();
+        ensureAllowedDirectory(normalized);
         HttpComponentsMessageSender sender = new HttpComponentsMessageSender();
-        sender.setConnectionTimeout(timeout);
-        sender.setReadTimeout(timeout);
-        sender.setHttpClient(createHttpClient());
+        sender.setConnectionTimeout(Math.toIntExact(timeout.toMillis()));
+        sender.setReadTimeout(Math.toIntExact(timeout.toMillis()));
         return sender;
     }
 
     public boolean isCertificateValid() {
-        return getCertificateInfo().isValid();
+        return getCertificateInfo().valid();
     }
 
     public CertificateInfo getCertificateInfo() {
@@ -94,23 +91,6 @@ public class SefazCertificateManager {
             LOGGER.warn("Não foi possível validar o certificado SEFAZ", ex);
             return CertificateInfo.invalid(null, null);
         }
-    }
-
-    private HttpClient createHttpClient()
-            throws KeyStoreException, IOException, NoSuchAlgorithmException, CertificateException, UnrecoverableKeyException {
-        KeyStore keyStore = loadKeyStore();
-        char[] password = certificatePassword().toCharArray();
-        var sslContext = org.apache.hc.core5.ssl.SSLContexts.custom()
-                .loadKeyMaterial(keyStore, password)
-                .loadTrustMaterial(null, (chain, authType) -> true)
-                .build();
-        SocketConfig socketConfig = SocketConfig.custom()
-                .setSoTimeout(Timeout.of(timeout))
-                .build();
-        return HttpClients.custom()
-                .setDefaultSocketConfig(socketConfig)
-                .setSSLContext(sslContext)
-                .build();
     }
 
     private KeyStore loadKeyStore()

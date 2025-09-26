@@ -41,7 +41,7 @@ class SefazAdapterMetricsTest {
 
         assertThat(status).isEqualTo(SefazStatus.AUTORIZADA);
         assertThat(registry.counter("sefaz.check.total", "result", "success").count()).isEqualTo(1);
-        assertThat(registry.find("sefaz.check.duration").timer()).isPresent();
+        assertThat(registry.find("sefaz.check.duration").timer()).isNotNull();
     }
 
     @Test
@@ -59,12 +59,12 @@ class SefazAdapterMetricsTest {
                   <soap:Body>
                     <nfeResultMsg xmlns=\"http://www.portalfiscal.inf.br/nfe/wsdl/NfeConsultaProtocolo4\">
                       <retConsSitNFe xmlns=\"http://www.portalfiscal.inf.br/nfe\">
-                        <cStat>""" + code + """</cStat>
+                        <cStat>%s</cStat>
                         <xMotivo>OK</xMotivo>
                       </retConsSitNFe>
                     </nfeResultMsg>
                   </soap:Body>
                 </soap:Envelope>
-                """;
+                """.formatted(code);
     }
 }

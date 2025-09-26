@@ -13,8 +13,7 @@ class Tess4JOcrAdapterAccuracyTest {
 
     @Test
     void shouldKeepAccessKeyExtractionAccuracyAboveSeventyPercent() throws Exception {
-        Tess4JOcrAdapter adapter = new Tess4JOcrAdapter(
-                true, "por", "/usr/share/tessdata", "27865757000102", "12345678909");
+        Tess4JOcrAdapter adapter = new Tess4JOcrAdapter(true, "por", "/usr/share/tessdata", 75);
         Method method = Tess4JOcrAdapter.class.getDeclaredMethod("buildXmlFromText", String.class);
         method.setAccessible(true);
 
@@ -36,9 +35,12 @@ class Tess4JOcrAdapterAccuracyTest {
     }
 
     @SuppressWarnings("unchecked")
-    private Optional<String> extractAccessKey(Method method, Tess4JOcrAdapter adapter, String sample)
-            throws Exception {
-        return (Optional<String>) method.invoke(adapter, sample);
+    private Optional<String> extractAccessKey(Method method, Tess4JOcrAdapter adapter, String sample) {
+        try {
+            return (Optional<String>) method.invoke(adapter, sample);
+        } catch (Exception ex) {
+            throw new RuntimeException(ex);
+        }
     }
 
     private String sampleTextOne() {
