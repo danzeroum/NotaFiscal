@@ -1,0 +1,29 @@
+{
+  "version": "6.0",
+  "timestamp": "2025-01-20T10:00:00Z",
+  "foundation_level": "lite",
+  "votes": {
+    "architect": {"level": "lite", "confidence": 0.9},
+    "developer": {"level": "lite", "confidence": 0.85},
+    "auditor": {"level": "lite", "confidence": 0.8},
+    "designer": {"level": "lite", "confidence": 0.85},
+    "ops": {"level": "lite", "confidence": 0.9}
+  },
+  "consensus": {
+    "level": "lite",
+    "method": "fast-consensus-majority",
+    "reasoning": "MVP rápido com vendabilidade",
+    "upgrade_triggers": [
+      "Volume > 1000 req/s",
+      "Compliance SPED obrigatória",
+      "Multi-tenant requisitado"
+    ]
+  },
+  "implementation_profile": {
+    "lite": {
+      "stack": ["Spring Boot 3", "H2/Postgres", "Docker"],
+      "infra": ["Single container", "Basic monitoring"],
+      "timeline": "3 semanas"
+    }
+  }
+}
