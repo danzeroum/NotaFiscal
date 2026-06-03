@@ -15,6 +15,10 @@
 .DS_Store
 Thumbs.db
 
+# Secrets
+.env
+*.env
+
 # Generated samples
 samples/*.zip
 samples/*.xlsx
